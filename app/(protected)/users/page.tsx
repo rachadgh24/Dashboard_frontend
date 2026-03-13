@@ -5,11 +5,13 @@ import { FiSearch } from 'react-icons/fi';
 import { useEffect, useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   useUserStore,
   type User,
   type UserRole,
 } from '@/store/usersState';
+import { useIsAdmin } from '@/lib/useUserRole';
 
 const ROLES: UserRole[] = ['Admin', 'SocialMediaManager', 'GeneralManager'];
 
@@ -24,6 +26,8 @@ function roleLabelKey(role: UserRole): string {
 
 export default function UsersPage() {
   const { t } = useTranslation();
+  const router = useRouter();
+  const isAdmin = useIsAdmin();
   const users = useUserStore((state) => state.users);
   const filteredUsers = useUserStore((state) => state.filteredUsers);
   const query = useUserStore((state) => state.query);
@@ -54,13 +58,18 @@ export default function UsersPage() {
   const [newRole, setNewRole] = useState<UserRole>('GeneralManager');
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
   useEffect(() => {
+    if (!isAdmin) {
+      router.replace('/customers');
+      return;
+    }
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        await fetchUsers();
+        await fetchUsers(roleFilter || undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
       } finally {
@@ -68,7 +77,7 @@ export default function UsersPage() {
       }
     };
     load();
-  }, [fetchUsers, t]);
+  }, [isAdmin, router, fetchUsers, roleFilter, t]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -147,6 +156,14 @@ export default function UsersPage() {
       setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <main className="min-h-full bg-transparent">
+        <p className="text-slate-800">{t('loading')}</p>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
@@ -250,9 +267,26 @@ export default function UsersPage() {
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="mb-3 text-sm font-semibold text-gray-900">
-            {t('allUsers')}
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-900">
+              {t('allUsers')}
+            </h2>
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <span>{t('role')}</span>
+              <select
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter((e.target.value || '') as UserRole | '')}
+              >
+                <option value="">{t('sortDefault')}</option>
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(roleLabelKey(r))}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="space-y-3">
             {filteredUsers.map((user: User) => (

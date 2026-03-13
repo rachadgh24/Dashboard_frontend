@@ -9,20 +9,12 @@ import Link from 'next/link';
 import { useCustomerStore } from '../../../store/customersState';
 import type { CreateCustomerPayload } from '../../../store/customersState';
 
-type Car = {
-  id: number;
-  model: string;
-  maxSpeed: number;
-  userId?: number;
-  UserId?: number;
-  customerId?: number;
-  CustomerId?: number;
-};
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 export default function CustomersPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
-  const customers = useCustomerStore((state) => state.customers);
+  const [mounted, setMounted] = useState(false);
   const filteredCustomers = useCustomerStore((state) => state.filteredCustomers);
   const query = useCustomerStore((state) => state.query);
   const fetchCustomersPaginate = useCustomerStore((state) => state.fetchCustomersPaginate);
@@ -34,13 +26,13 @@ export default function CustomersPage() {
   const [lastName, setLastName] = useState('');
   const [city, setCity] = useState('');
   const [email, setEmail] = useState('');
-  const [cars, setCars] = useState<Car[]>([]);
   const [expandedCustomerIds, setExpandedCustomerIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [sortBy, setSortBy] = useState<string | null>(null);
 
   const getAuthHeaders = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -50,13 +42,17 @@ export default function CustomersPage() {
   };
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     const init = async () => {
       setLoading(true);
       setError(null);
       try {
         const [countRes, size] = await Promise.all([
-          fetch('https://localhost:7190/Customers/count', { headers: getAuthHeaders() }),
-          fetchCustomersPaginate(1),
+          fetch(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() }),
+          fetchCustomersPaginate(1, sortBy ?? undefined),
         ]);
         const total: number = await countRes.json();
         const ps = size || 1;
@@ -70,24 +66,7 @@ export default function CustomersPage() {
       }
     };
     init();
-  }, [fetchCustomersPaginate]);
-
-  useEffect(() => {
-    const fetchCars = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('https://localhost:7190/Cars', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        setCars(data);
-      } catch {
-        // ignore
-      }
-    };
-    fetchCars();
-  }, []);
+  }, [fetchCustomersPaginate, sortBy]);
 
   const toggleExpanded = (customerId: number) => {
     setExpandedCustomerIds((prev) =>
@@ -95,10 +74,7 @@ export default function CustomersPage() {
     );
   };
 
-  const getCarsForCustomer = (customerId: number) =>
-    cars.filter((c) =>
-      (c.customerId ?? c.CustomerId ?? c.userId ?? c.UserId) === customerId
-    );
+  const getCarsForCustomer = (customer: Customer) => customer.cars ?? [];
 
   const formatValue = (value: unknown) => {
     if (value === null || value === undefined) return '';
@@ -122,14 +98,14 @@ export default function CustomersPage() {
     setError(null);
     try {
       const [countRes, size] = await Promise.all([
-        fetch('https://localhost:7190/Customers/count', { headers: getAuthHeaders() }),
-        fetchCustomersPaginate(page),
+        fetch(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() }),
+        fetchCustomersPaginate(page, sortBy ?? undefined),
       ]);
       const total: number = await countRes.json();
       const newTotalPages = Math.max(1, Math.ceil(total / pageSize));
       const safePage = Math.min(page, newTotalPages);
       if (safePage < page) {
-        await fetchCustomersPaginate(safePage);
+        await fetchCustomersPaginate(safePage, sortBy ?? undefined);
         setCurrentPage(safePage);
       } else {
         setCurrentPage(page);
@@ -166,7 +142,7 @@ export default function CustomersPage() {
   };
 
   if (loading) {
-    return <main className="text-slate-800">{t('loadingCustomers')}</main>;
+    return <main className="text-slate-800">{mounted ? t('loadingCustomers') : 'Loading customers...'}</main>;
   }
 
   if (error) {
@@ -181,14 +157,14 @@ export default function CustomersPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-lg font-semibold text-gray-900">
-                  {t('customers')}
+                  {mounted ? t('customers') : 'Customers'}
                 </h1>
                 <p className="text-xs text-gray-500">
-                  {t('customersSubtitle')}
+                  {mounted ? t('customersSubtitle') : 'Manage your customers and basic details.'}
                 </p>
               </div>
               <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-                {t('totalCount', { count: filteredCustomers.length })}
+                {mounted ? t('totalCount', { count: filteredCustomers.length }) : `${filteredCustomers.length} total`}
               </span>
             </div>
 
@@ -199,19 +175,19 @@ export default function CustomersPage() {
               <div className="grid gap-2 md:grid-cols-3">
                 <input
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-black focus:border-slate-400 focus:ring-0"
-                  placeholder={t('name')}
+                  placeholder={mounted ? t('name') : 'Name'}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
                 <input
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-black focus:border-slate-400 focus:ring-0"
-                  placeholder={t('lastName')}
+                  placeholder={mounted ? t('lastName') : 'Last name'}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                 />
                 <input
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-black focus:border-slate-400 focus:ring-0"
-                  placeholder={t('city')}
+                  placeholder={mounted ? t('city') : 'City'}
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                 />
@@ -220,7 +196,7 @@ export default function CustomersPage() {
                 <input
                   type="email"
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-black focus:border-slate-400 focus:ring-0"
-                  placeholder={t('email')}
+                  placeholder={mounted ? t('email') : 'Email'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -229,33 +205,47 @@ export default function CustomersPage() {
                 type="submit"
                 className="mt-2 inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
               >
-                {t('createCustomer')}
+                {mounted ? t('createCustomer') : 'Create customer'}
               </button>
             </form>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">
-              {t('quickSearch')}
+              {mounted ? t('quickSearch') : 'Quick search'}
             </h2>
             <SearchBar className="w-full" />
             <p className="mt-2 text-[11px] text-gray-500">
-              {t('searchByNameLastnameCity')}
+              {mounted ? t('searchByNameLastnameCity') : 'Search by name, last name, or city.'}
             </p>
           </div>
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-900">
-              {t('allCustomers')}
+              {mounted ? t('allCustomers') : 'All customers'}
             </h2>
+            <label className="flex items-center gap-2 text-xs text-gray-600">
+              <span>{mounted ? t('sortBy') : 'Sort by'}</span>
+              <select
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                value={sortBy ?? ''}
+                onChange={(e) => setSortBy(e.target.value || null)}
+              >
+                <option value="">{mounted ? t('sortDefault') : 'Default'}</option>
+                <option value="LeastCars">{mounted ? t('sortByLeastCars') : 'Least cars'}</option>
+                <option value="MostCars">{mounted ? t('sortByMostCars') : 'Most cars'}</option>
+                <option value="CarName">{mounted ? t('sortByCarName') : 'Car name'}</option>
+                <option value="OwnerName">{mounted ? t('sortByOwnerName') : 'Owner name'}</option>
+              </select>
+            </label>
           </div>
 
           <div className="space-y-3">
             {filteredCustomers.map((customer: Customer) => {
               const isExpanded = expandedCustomerIds.includes(customer.id);
-              const customerCars = getCarsForCustomer(customer.id);
+              const customerCars = getCarsForCustomer(customer);
               return (
                 <div
                   key={customer.id}
@@ -268,7 +258,7 @@ export default function CustomersPage() {
                     <button
                       type="button"
                       className="p-0.5 text-gray-500 hover:text-gray-700"
-                      aria-label={isExpanded ? t('collapse') : t('expand')}
+                      aria-label={isExpanded ? (mounted ? t('collapse') : 'Collapse') : (mounted ? t('expand') : 'Expand')}
                     >
                       {isExpanded ? (
                         <FaChevronDown size={16} />
@@ -288,7 +278,7 @@ export default function CustomersPage() {
                         <span className="text-gray-500"> {customer.lastName}</span>
                       </div>
                       <div className="truncate text-gray-700">
-                        <span className="font-semibold text-gray-500">{t('cityLabel')} </span>
+                        <span className="font-semibold text-gray-500">{mounted ? t('cityLabel') : 'City:'} </span>
                         {formatValue(customer.city)}
                       </div>
                       <div className="truncate text-gray-500 text-xs md:text-sm">
@@ -306,7 +296,7 @@ export default function CustomersPage() {
                         onClick={() => setSelectedCustomer(customer)}
                       >
                         <FaEye size={14} className="me-1" />
-                        {t('view')}
+                        {mounted ? t('view') : 'View'}
                       </Link>
                       <button
                         type="button"
@@ -314,7 +304,7 @@ export default function CustomersPage() {
                         onClick={() => handleDelete(customer.id)}
                       >
                         <FaTrash size={12} className="me-1" />
-                        {t('delete')}
+                        {mounted ? t('delete') : 'Delete'}
                       </button>
                     </div>
                   </div>
@@ -323,11 +313,11 @@ export default function CustomersPage() {
                     <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
                       <h3 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
                         <FaCar size={12} />
-                        {t('carsCount', { count: customerCars.length })}
+                        {mounted ? t('carsCount', { count: customerCars.length }) : `Cars (${customerCars.length})`}
                       </h3>
                       {customerCars.length === 0 ? (
                         <p className="text-xs text-gray-500 py-2">
-                          {t('noCarsForCustomer')}
+                          {mounted ? t('noCarsForCustomer') : 'No cars for this customer.'}
                         </p>
                       ) : (
                         <ul className="space-y-2">
@@ -354,7 +344,7 @@ export default function CustomersPage() {
 
             {filteredCustomers.length === 0 && (
               <div className="py-6 text-center text-xs text-gray-500">
-                {t('noCustomersMatchFilters')}
+                {mounted ? t('noCustomersMatchFilters') : 'No customers match your current filters.'}
               </div>
             )}
 

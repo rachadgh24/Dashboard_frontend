@@ -77,6 +77,7 @@ function formatNotificationTime(ms: number): string {
 const Header = () => {
   const { t } = useTranslation();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [currentUser, setCurrentUser] = useState<HeaderUser>({ name: '', email: '' });
   const [role, setRole] = useState<DashboardRole>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -90,6 +91,7 @@ const Header = () => {
   const clearAll = useNotificationStore((s) => s.clearAll);
 
   useEffect(() => {
+    setMounted(true);
     const name = localStorage.getItem('admin_name') ?? '';
     const email = localStorage.getItem('admin_email') ?? '';
     setCurrentUser({ name, email });
@@ -134,10 +136,10 @@ const Header = () => {
     <div className="flex w-full items-center justify-between px-6 py-4">
       <div className="flex flex-col">
         <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-          {t('dashboard')}
+          {mounted ? t('dashboard') : 'Dashboard'}
         </span>
         <span className="mt-1 text-xl font-semibold text-slate-900">
-          {t('userAndFleetOverview')}
+          {mounted ? t('userAndFleetOverview') : 'Overview'}
         </span>
       </div>
 
@@ -157,7 +159,7 @@ const Header = () => {
               type="button"
               onClick={() => setInboxOpen((o) => !o)}
               className="relative rounded-lg border border-slate-200 p-2 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
-              aria-label={t('notifications')}
+              aria-label={mounted ? t('notifications') : 'Notifications'}
             >
               <FaBell size={18} />
               {notifications.length > 0 && (
@@ -169,21 +171,21 @@ const Header = () => {
             {inboxOpen && (
               <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white shadow-lg">
                 <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-800">{t('notifications')}</span>
+                  <span className="text-sm font-semibold text-slate-800">{mounted ? t('notifications') : 'Notifications'}</span>
                   {notifications.length > 0 && (
                     <button
                       type="button"
                       onClick={clearAll}
                       className="text-xs text-slate-500 hover:text-slate-700"
                     >
-                      {t('clearAll')}
+                      {mounted ? t('clearAll') : 'Clear all'}
                     </button>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {loading ? (
                     <div className="px-4 py-6 text-center text-xs text-slate-500">
-                      {t('loading')}
+                      {mounted ? t('loading') : 'Loading...'}
                     </div>
                   ) : error ? (
                     <div className="px-4 py-6 text-center text-xs text-red-600">
@@ -191,7 +193,7 @@ const Header = () => {
                     </div>
                   ) : notifications.length === 0 ? (
                     <div className="px-4 py-6 text-center text-xs text-slate-500">
-                      {t('noNotifications')}
+                      {mounted ? t('noNotifications') : 'No notifications yet.'}
                     </div>
                   ) : (
                     notifications.map((n) => (
@@ -207,7 +209,7 @@ const Header = () => {
                           type="button"
                           onClick={() => removeNotification(n.id)}
                           className="shrink-0 rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-slate-200 hover:text-slate-600 group-hover:opacity-100"
-                          aria-label={t('delete')}
+                          aria-label={mounted ? t('delete') : 'Delete'}
                         >
                           <FaTimes size={12} />
                         </button>
@@ -234,7 +236,7 @@ const Header = () => {
           onClick={handleLogout}
           className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
         >
-          {t('logOut')}
+          {mounted ? t('logOut') : 'Log out'}
         </button>
       </div>
     </div>

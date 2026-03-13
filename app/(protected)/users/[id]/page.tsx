@@ -9,6 +9,7 @@ import {
   type User,
   type UserRole,
 } from '@/store/usersState';
+import { useIsAdmin } from '@/lib/useUserRole';
 
 const ROLES: UserRole[] = ['Admin', 'SocialMediaManager', 'GeneralManager'];
 
@@ -25,6 +26,7 @@ export default function UserDetailPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useParams();
+  const isAdmin = useIsAdmin();
   const id = params.id as string;
 
   const fetchUser = useUserStore((state) => state.fetchUser);
@@ -45,6 +47,10 @@ export default function UserDetailPage() {
   const [roleSaving, setRoleSaving] = useState(false);
 
   useEffect(() => {
+    if (!isAdmin) {
+      router.replace('/customers');
+      return;
+    }
     if (!id) return;
     const load = async () => {
       setLoading(true);
@@ -68,7 +74,7 @@ export default function UserDetailPage() {
       }
     };
     load();
-  }, [id, fetchUser, t]);
+  }, [isAdmin, router, id, fetchUser, t]);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -123,6 +129,14 @@ export default function UserDetailPage() {
       setSaveError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <main className="flex min-h-full items-center justify-center bg-transparent py-8">
+        <div className="text-gray-700">{t('loading')}</div>
+      </main>
+    );
+  }
 
   if (!id) {
     return (

@@ -46,6 +46,7 @@ export default function I18nProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!mounted) return;
+    if (i18n.language === locale) return;
     i18n.changeLanguage(locale);
   }, [locale, mounted]);
 
@@ -58,18 +59,10 @@ export default function I18nProvider({ children }: { children: React.ReactNode }
 
   const value = useMemo(() => ({ locale, setLocale }), [locale, setLocale]);
 
-  if (!mounted) {
-    return (
-      <LocaleContext.Provider value={value}>
-        <I18nextProvider i18n={i18n}>{children}</I18nextProvider>
-      </LocaleContext.Provider>
-    );
-  }
-
   return (
     <LocaleContext.Provider value={value}>
       <I18nextProvider i18n={i18n}>
-        <SetHtmlAttributes locale={locale} />
+        {mounted && <SetHtmlAttributes locale={locale} />}
         {children}
       </I18nextProvider>
     </LocaleContext.Provider>

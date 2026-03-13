@@ -42,7 +42,7 @@ interface UserStore {
   query: string;
   setQuery: (q: string) => void;
   setSelectedUser: (user: User) => void;
-  fetchUsers: () => Promise<void>;
+  fetchUsers: (role?: string) => Promise<void>;
   fetchUser: (id: string) => Promise<User | null>;
   createUser: (payload: CreateUserPayload) => Promise<void>;
   updateUser: (id: number, payload: UpdateUserPayload) => Promise<void>;
@@ -75,8 +75,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   setSelectedUser: (user) => set({}),
 
-  fetchUsers: async () => {
-    const res = await fetch(USERS_API, {
+  fetchUsers: async (role?: string) => {
+    const url = role ? `${USERS_API}?role=${encodeURIComponent(role)}` : USERS_API;
+    const res = await fetch(url, {
       cache: 'no-store',
       headers: getAuthHeaders(),
     });

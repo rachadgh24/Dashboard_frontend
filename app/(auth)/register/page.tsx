@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,9 @@ type RegisterPayload = {
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 export default function RegisterPage() {
-  const { t } = useTranslation();
+  const { t, ready } = useTranslation();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState<RegisterPayload>({
     email: '',
     password: '',
@@ -29,6 +30,10 @@ export default function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const canSubmit = useMemo(
     () => form.email.trim() !== '' && form.password.trim() !== '' && !isSubmitting,
@@ -96,12 +101,49 @@ export default function RegisterPage() {
         lastName: '',
         city: '',
       });
-      router.push('/posts');
+      const role = token
+        ? (() => {
+            try {
+              const payload = token.split('.')[1];
+              if (!payload) return null;
+              const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+              const json = decodeURIComponent(
+                atob(base64)
+                  .split('')
+                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join('')
+              );
+              const claims = JSON.parse(json) as Record<string, unknown>;
+              const val = claims['role'] ?? claims['Role'];
+              const v = String(val ?? '').toLowerCase().replace(/\s/g, '');
+              return v === 'admin' ? 'admin' : null;
+            } catch {
+              return null;
+            }
+          })()
+        : null;
+      router.push(role === 'admin' ? '/home' : '/customers');
     } catch {
       setErrorMessage(t('couldNotConnect'));
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (!mounted || !ready) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-white to-blue-100 px-4 py-10">
+        <div className="absolute end-4 top-4">
+          <LanguageSwitcher />
+        </div>
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl animate-pulse">
+          <div className="mb-6 h-8 w-3/4 rounded bg-slate-200" />
+          <div className="mb-4 h-10 rounded-xl bg-slate-100" />
+          <div className="mb-4 h-10 rounded-xl bg-slate-100" />
+          <div className="mb-4 h-10 rounded-xl bg-slate-100" />
+        </div>
+      </main>
+    );
   }
 
   return (

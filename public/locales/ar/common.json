@@ -111,5 +111,16 @@
   "searchUsersPlaceholder": "البحث بالبريد أو الاسم أو الدور",
   "confirmDeleteUser": "هل أنت متأكد من حذف هذا المستخدم؟",
   "clearAll": "مسح الكل",
-  "noNotifications": "لا توجد إشعارات بعد."
+  "noNotifications": "لا توجد إشعارات بعد.",
+  "sortBy": "ترتيب حسب",
+  "sortDefault": "الافتراضي",
+  "sortByLeastCars": "الأقل سيارات",
+  "sortByMostCars": "الأكثر سيارات",
+  "sortByCarName": "اسم السيارة",
+  "sortByOwnerName": "اسم المالك",
+  "home": "الرئيسية",
+  "topCustomer": "أفضل عميل",
+  "topPerformer": "أفضل أداء",
+  "quickActions": "إجراءات سريعة",
+  "createPost": "إنشاء منشور"
 }

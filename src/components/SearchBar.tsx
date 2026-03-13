@@ -12,6 +12,12 @@ export default function SearchBar({ className }: { className?: string }) {
   const searchCustomers = useCustomerStore((state) => state.searchCustomers);
 
   useEffect(() => {
+    if (!query.trim()) {
+      searchCustomers(query).catch((error) => {
+        console.error('Failed to search customers', error);
+      });
+      return;
+    }
     const timeoutId = window.setTimeout(() => {
       searchCustomers(query).catch((error) => {
         console.error('Failed to search customers', error);
