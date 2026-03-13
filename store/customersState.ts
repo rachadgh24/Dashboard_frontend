@@ -27,12 +27,21 @@ const searchCustomersRequest = async (query: string): Promise<Customer[]> => {
   return res.json();
 };
 
+export interface Car {
+  id: number;
+  model: string;
+  maxSpeed: number;
+  customerId?: number;
+  CustomerId?: number;
+}
+
 export interface Customer {
   id: number;
   name: string;
   lastName: string;
   city: string;
   email?: string;
+  cars?: Car[];
 }
 
 export interface CreateCustomerPayload {
@@ -48,7 +57,7 @@ interface CustomerStore {
   filteredCustomers: Customer[];
   setSelectedCustomer: (customer: Customer) => void;
   fetchCustomers: () => Promise<void>;
-  fetchCustomersPaginate: (page: number) => Promise<number>;
+  fetchCustomersPaginate: (page: number, sortBy?: string) => Promise<number>;
   fetchCustomer: (id: string) => Promise<void>;
   searchCustomers: (query: string) => Promise<void>;
   createCustomer: (payload: CreateCustomerPayload) => Promise<void>;
@@ -92,8 +101,11 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
       await syncFilteredCustomers(data);
     },
 
-    fetchCustomersPaginate: async (page) => {
-      const res = await fetch(`${CUSTOMERS_API}/paginate?page=${page}`, {
+    fetchCustomersPaginate: async (page, sortBy) => {
+      const url = sortBy
+        ? `${CUSTOMERS_API}/paginate?page=${page}&sortBy=${encodeURIComponent(sortBy)}`
+        : `${CUSTOMERS_API}/paginate?page=${page}`;
+      const res = await fetch(url, {
         cache: 'no-store',
         headers: getAuthHeaders(),
       });
