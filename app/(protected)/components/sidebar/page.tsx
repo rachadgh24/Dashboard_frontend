@@ -5,68 +5,25 @@ import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FaUsers, FaSalesforce, FaUserCog, FaNewspaper, FaHome } from 'react-icons/fa';
-
-type DashboardRole = 'admin' | 'socialmediamanager' | 'generalmanager' | null;
-
-function getUserRole(): DashboardRole {
-  if (typeof window === 'undefined') return null;
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return null;
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    const claims = JSON.parse(json) as Record<string, unknown>;
-    const roleKeys = [
-      'role',
-      'Role',
-      'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
-    ];
-    const normalize = (value: unknown): DashboardRole => {
-      const v = String(value).toLowerCase().replace(/\s/g, '');
-      if (v === 'admin') return 'admin';
-      if (v === 'socialmediamanager') return 'socialmediamanager';
-      if (v === 'generalmanager') return 'generalmanager';
-      return null;
-    };
-    for (const key of roleKeys) {
-      const val = claims[key];
-      if (typeof val === 'string') {
-        const role = normalize(val);
-        if (role) return role;
-      }
-      if (Array.isArray(val)) {
-        for (const r of val) {
-          const role = normalize(r);
-          if (role) return role;
-        }
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { usePermissionsStore } from '@/store/permissionsState';
 
 const SideBar = () => {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const [role, setRole] = useState<DashboardRole>(null);
   const [mounted, setMounted] = useState(false);
+  const fetchPermissions = usePermissionsStore((s) => s.fetchPermissions);
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+
+  const showDashboard = hasClaim('ViewDashboard');
+  const showCustomers = hasClaim('ViewCustomers');
+  const showCars = hasClaim('ViewCars');
+  const showUsers = hasClaim('ViewUsers');
+  const showPosts = hasClaim('ViewPosts');
 
   useEffect(() => {
-    setRole(getUserRole());
     setMounted(true);
-  }, []);
-
-  const isAdmin = role === 'admin';
-  const isGeneralManager = role === 'generalmanager';
+    fetchPermissions();
+  }, [fetchPermissions]);
 
   const linkBase =
     'flex flex-row items-center justify-center md:justify-start gap-0 md:gap-3 rounded-lg px-2 md:px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer';
@@ -97,7 +54,7 @@ const SideBar = () => {
             {mounted ? t('main') : 'Main'}
           </p>
 
-          {isAdmin && (
+          {showDashboard && (
             <Link href="/home" className="block w-full" title={mounted ? t('home') : 'Home'}>
               <div
                 className={`${linkBase} ${pathname === '/home'
@@ -113,7 +70,7 @@ const SideBar = () => {
             </Link>
           )}
 
-          {(isAdmin || isGeneralManager) && (
+          {showCustomers && (
             <Link href="/customers" className="block w-full" title={mounted ? t('customers') : 'Customers'}>
               <div
                 className={`${linkBase} ${pathname.includes('customers')
@@ -129,7 +86,7 @@ const SideBar = () => {
             </Link>
           )}
 
-          {(isAdmin || isGeneralManager) && (
+          {showCars && (
             <Link href="/sales" className="block w-full" title={mounted ? t('cars') : 'Cars'}>
               <div
                 className={`${linkBase} ${pathname.includes('sales')
@@ -145,7 +102,7 @@ const SideBar = () => {
             </Link>
           )}
 
-          {isAdmin && (
+          {showUsers && (
             <Link href="/users" className="block w-full" title={mounted ? t('users') : 'Users'}>
               <div
                 className={`${linkBase} ${pathname.includes('users')
@@ -161,19 +118,21 @@ const SideBar = () => {
             </Link>
           )}
 
-          <Link href="/posts" className="block w-full" title={mounted ? t('posts') : 'Posts'}>
-            <div
-              className={`${linkBase} ${pathname.includes('posts')
+          {showPosts && (
+            <Link href="/posts" className="block w-full" title={mounted ? t('posts') : 'Posts'}>
+              <div
+                className={`${linkBase} ${pathname.includes('posts')
                   ? 'bg-slate-100 text-slate-900'
                   : 'text-slate-200 hover:bg-slate-800'
                 }`}
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-300 shrink-0">
-                <FaNewspaper size={16} />
-              </span>
-              <span className="hidden md:inline">{mounted ? t('posts') : 'Posts'}</span>
-            </div>
-          </Link>
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-300 shrink-0">
+                  <FaNewspaper size={16} />
+                </span>
+                <span className="hidden md:inline">{mounted ? t('posts') : 'Posts'}</span>
+              </div>
+            </Link>
+          )}
         </nav>
       </div>
 

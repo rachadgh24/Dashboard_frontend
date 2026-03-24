@@ -8,19 +8,19 @@ test.describe('Auth', () => {
       await page.goto('/logIn');
 
       await expect(page.getByRole('heading', { name: /login/i })).toBeVisible();
-      await expect(page.getByPlaceholder(/email/i)).toBeVisible();
+      await expect(page.getByPlaceholder(/phone/i)).toBeVisible();
       await expect(page.getByPlaceholder(/password/i)).toBeVisible();
       await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
       await expect(page.getByRole('link', { name: /create one/i })).toBeVisible();
     });
 
-    test('should have sign in button disabled when email or password is empty', async ({ page }) => {
+    test('should have sign in button disabled when phone or password is empty', async ({ page }) => {
       await page.goto('/logIn');
 
       const signInBtn = page.getByRole('button', { name: /sign in/i });
       await expect(signInBtn).toBeDisabled();
 
-      await page.getByPlaceholder(/email/i).fill('user@example.com');
+      await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await expect(signInBtn).toBeDisabled();
 
       await page.getByPlaceholder(/password/i).fill('password');
@@ -36,7 +36,7 @@ test.describe('Auth', () => {
       });
 
       await page.goto('/logIn');
-      await page.getByPlaceholder(/email/i).fill('wrong@example.com');
+      await page.getByPlaceholder(/phone/i).fill('+1999999999');
       await page.getByPlaceholder(/password/i).fill('wrongpassword');
       await page.getByRole('button', { name: /sign in/i }).click();
 
@@ -50,9 +50,9 @@ test.describe('Auth', () => {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4iLCJuYW1lIjoiVGVzdCIsImVtYWlsIjoidGVzdEB0ZXN0LmNvbSJ9.x',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4iLCJuYW1lIjoiVGVzdCIsInBob25lTnVtYmVyIjoiKzEyMzQ1Njc4OTAifQ.x',
               name: 'Test User',
-              email: 'test@test.com',
+              phoneNumber: '+1234567890',
             }),
           });
         }
@@ -60,7 +60,7 @@ test.describe('Auth', () => {
       });
 
       await page.goto('/logIn');
-      await page.getByPlaceholder(/email/i).fill('test@test.com');
+      await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await page.getByPlaceholder(/password/i).fill('validpassword');
       await page.getByRole('button', { name: /sign in/i }).click();
 
@@ -77,20 +77,20 @@ test.describe('Auth', () => {
       await expect(page.getByRole('heading', { name: /register/i })).toBeVisible();
       await expect(page.getByPlaceholder(/first name/i)).toBeVisible();
       await expect(page.getByPlaceholder(/last name/i)).toBeVisible();
-      await expect(page.getByPlaceholder(/email/i)).toBeVisible();
+      await expect(page.getByPlaceholder(/phone/i)).toBeVisible();
       await expect(page.getByPlaceholder(/password/i)).toBeVisible();
       await expect(page.getByPlaceholder(/city/i)).toBeVisible();
       await expect(page.getByRole('button', { name: /create account/i })).toBeVisible();
       await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
     });
 
-    test('should have create account button disabled when email or password is empty', async ({ page }) => {
+    test('should have create account button disabled when phone or password is empty', async ({ page }) => {
       await page.goto('/register');
 
       const createBtn = page.getByRole('button', { name: /create account/i });
       await expect(createBtn).toBeDisabled();
 
-      await page.getByPlaceholder(/email/i).fill('new@example.com');
+      await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await page.getByPlaceholder(/password/i).fill('password123');
       await expect(createBtn).toBeEnabled();
     });
@@ -98,17 +98,17 @@ test.describe('Auth', () => {
     test('should show error when registration API fails', async ({ page }) => {
       await page.route(AUTH_API, (route) => {
         if (route.request().method() === 'POST' && route.request().url().includes('register')) {
-          return route.fulfill({ status: 400, body: 'Email already exists' });
+          return route.fulfill({ status: 400, body: 'Phone number already exists' });
         }
         return route.continue();
       });
 
       await page.goto('/register');
-      await page.getByPlaceholder(/email/i).fill('existing@example.com');
+      await page.getByPlaceholder(/phone/i).fill('+1999999999');
       await page.getByPlaceholder(/password/i).fill('password123');
       await page.getByRole('button', { name: /create account/i }).click();
 
-      await expect(page.getByText(/email already exists|registration failed/i)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/phone number already exists|registration failed/i)).toBeVisible({ timeout: 5000 });
     });
 
     test('should redirect to /posts on successful registration', async ({ page }) => {
@@ -118,9 +118,9 @@ test.describe('Auth', () => {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4iLCJuYW1lIjoiTmV3IiwiZW1haWwiOiJuZXdAZXhhbXBsZS5jb20ifQ.x',
+              token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4iLCJuYW1lIjoiTmV3IiwicGhvbmVOdW1iZXIiOiIrMTIzNDU2Nzg5MCJ9.x',
               name: 'New User',
-              email: 'new@example.com',
+              phoneNumber: '+1234567890',
             }),
           });
         }
@@ -130,7 +130,7 @@ test.describe('Auth', () => {
       await page.goto('/register');
       await page.getByPlaceholder(/first name/i).fill('New');
       await page.getByPlaceholder(/last name/i).fill('User');
-      await page.getByPlaceholder(/email/i).fill('new@example.com');
+      await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await page.getByPlaceholder(/password/i).fill('password123');
       await page.getByRole('button', { name: /create account/i }).click();
 
@@ -164,7 +164,7 @@ test.describe('Auth', () => {
             body: JSON.stringify({
               token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.x.x',
               name: 'Test',
-              email: 'test@test.com',
+              phoneNumber: '+1234567890',
             }),
           });
         }
@@ -172,7 +172,7 @@ test.describe('Auth', () => {
       });
 
       await page.goto('/logIn');
-      await page.getByPlaceholder(/email/i).fill('test@test.com');
+      await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await page.getByPlaceholder(/password/i).fill('pass');
       await page.getByRole('button', { name: /sign in/i }).click();
       await expect(page).toHaveURL(/\/posts/, { timeout: 10000 });

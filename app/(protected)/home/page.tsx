@@ -5,7 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaChevronDown, FaChevronUp, FaTrophy, FaPlus, FaCar, FaNewspaper, FaUserPlus } from 'react-icons/fa';
-import { useIsAdmin } from '@/lib/useUserRole';
+import { usePermissionsStore } from '@/store/permissionsState';
+import { apiFetch } from '@/lib/apiClient';
+import { getLandingRoute } from '@/lib/landingRoute';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
@@ -21,7 +23,12 @@ type Stats = {
 export default function HomePage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const isAdmin = useIsAdmin();
+  const permissionsLoaded = usePermissionsStore((s) => s.loaded);
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+  const canAccessDashboard = hasClaim('ViewDashboard');
+  const canAccessUsers = hasClaim('ViewUsers');
+  const canAccessCars = hasClaim('ViewCars');
+  const canAccessCustomers = hasClaim('ViewCustomers');
   const [mounted, setMounted] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,8 +40,9 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
-      router.replace('/customers');
+    if (!permissionsLoaded) return;
+    if (!canAccessDashboard) {
+      router.replace(getLandingRoute(hasClaim));
       return;
     }
     const load = async () => {
@@ -42,14 +50,9 @@ export default function HomePage() {
       setError(null);
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const res = await fetch(`${API_BASE}/Dashboard/stats`, {
+        const data = await apiFetch<Stats>(`${API_BASE}/Dashboard/stats`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        if (!res.ok) {
-          if (res.status === 401) throw new Error('Unauthorized');
-          throw new Error('Failed to load stats');
-        }
-        const data = await res.json();
         setStats(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load');
@@ -58,12 +61,12 @@ export default function HomePage() {
       }
     };
     load();
-  }, [isAdmin, router]);
+  }, [permissionsLoaded, canAccessDashboard, canAccessCustomers, canAccessCars, canAccessUsers, router]);
 
-  if (!isAdmin) {
+  if (!permissionsLoaded || !canAccessDashboard) {
     return (
       <main className="min-h-full bg-transparent">
-        <p className="text-slate-800">{mounted ? t('loading') : 'Loading...'}</p>
+        <p className="text-slate-800">Loading...</p>
       </main>
     );
   }
@@ -87,16 +90,16 @@ export default function HomePage() {
   const s = stats ?? { totalUsers: 0, totalCars: 0, totalCustomers: 0, topCustomer: null };
 
   const metrics = [
-    ...(isAdmin && s.totalUsers != null ? [{ label: mounted ? t('users') : 'Users', value: s.totalUsers, href: '/users', accent: 'from-amber-500 to-amber-600' }] : []),
-    { label: mounted ? t('cars') : 'Cars', value: s.totalCars, href: '/sales', accent: 'from-sky-500 to-sky-600' },
-    { label: mounted ? t('customers') : 'Customers', value: s.totalCustomers, href: '/customers', accent: 'from-emerald-500 to-emerald-600' },
+    ...(canAccessUsers && s.totalUsers != null ? [{ label: mounted ? t('users') : 'Users', value: s.totalUsers, href: '/users', accent: 'from-amber-500 to-amber-600' }] : []),
+    ...(canAccessCars ? [{ label: mounted ? t('cars') : 'Cars', value: s.totalCars, href: '/sales', accent: 'from-sky-500 to-sky-600' }] : []),
+    ...(canAccessCustomers ? [{ label: mounted ? t('customers') : 'Customers', value: s.totalCustomers, href: '/customers', accent: 'from-emerald-500 to-emerald-600' }] : []),
   ];
 
   const quickActions = [
-    { label: mounted ? t('createCustomer') : 'Create customer', href: '/customers', icon: FaPlus, key: 'createCustomer' },
-    { label: mounted ? t('addCar') : 'Add car', href: '/sales', icon: FaCar, key: 'addCar' },
-    { label: mounted ? t('createPost') : 'Create a post', href: '/posts', icon: FaNewspaper, key: 'createPost' },
-    ...(isAdmin ? [{ label: mounted ? t('createUser') : 'Create a user', href: '/users', icon: FaUserPlus, key: 'createUser' }] : []),
+    ...(hasClaim('CreateCustomer') ? [{ label: mounted ? t('createCustomer') : 'Create customer', href: '/customers', icon: FaPlus, key: 'createCustomer' }] : []),
+    ...(hasClaim('CreateCar') ? [{ label: mounted ? t('addCar') : 'Add car', href: '/sales', icon: FaCar, key: 'addCar' }] : []),
+    ...(hasClaim('CreatePost') ? [{ label: mounted ? t('createPost') : 'Create a post', href: '/posts', icon: FaNewspaper, key: 'createPost' }] : []),
+    ...(hasClaim('CreateUser') ? [{ label: mounted ? t('createUser') : 'Create a user', href: '/users', icon: FaUserPlus, key: 'createUser' }] : []),
   ];
 
   return (

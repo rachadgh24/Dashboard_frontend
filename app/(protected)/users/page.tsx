@@ -11,43 +11,50 @@ import {
   type User,
   type UserRole,
 } from '@/store/usersState';
-import { useIsAdmin } from '@/lib/useUserRole';
-
-const ROLES: UserRole[] = ['Admin', 'SocialMediaManager', 'GeneralManager'];
+import { usePermissionsStore } from '@/store/permissionsState';
 
 function roleLabelKey(role: UserRole): string {
-  const map: Record<UserRole, string> = {
-    Admin: 'roleAdmin',
-    SocialMediaManager: 'roleSocialMediaManager',
-    GeneralManager: 'roleGeneralManager',
-  };
-  return map[role] ?? role;
+  const normalized = String(role).toLowerCase().replace(/\s/g, '');
+  if (normalized === 'admin') return 'roleAdmin';
+  if (normalized === 'socialmediamanager') return 'roleSocialMediaManager';
+  if (normalized === 'generalmanager') return 'roleGeneralManager';
+  return role;
 }
 
 export default function UsersPage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const isAdmin = useIsAdmin();
+  const permissionsLoaded = usePermissionsStore((s) => s.loaded);
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+  const canAccessUsers = hasClaim('ViewUsers');
+  const canCreateUser = hasClaim('CreateUser');
+  const canEditUser = hasClaim('EditUser');
+  const canDeleteUser = hasClaim('DeleteUser');
+  const canChangeRole = hasClaim('ChangeUserRole');
+  const canViewUser = hasClaim('ViewUser');
+  const canSearchUsers = hasClaim('SearchUsers');
   const users = useUserStore((state) => state.users);
   const filteredUsers = useUserStore((state) => state.filteredUsers);
   const query = useUserStore((state) => state.query);
   const setQuery = useUserStore((state) => state.setQuery);
   const fetchUsers = useUserStore((state) => state.fetchUsers);
+  const roles = useUserStore((state) => state.roles);
+  const fetchRoles = useUserStore((state) => state.fetchRoles);
   const createUser = useUserStore((state) => state.createUser);
   const updateUser = useUserStore((state) => state.updateUser);
   const deleteUser = useUserStore((state) => state.deleteUser);
   const changeRole = useUserStore((state) => state.changeRole);
 
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('GeneralManager');
+  const [role, setRole] = useState<UserRole>('General Manager');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [editUser, setEditUser] = useState<User | null>(null);
-  const [editEmail, setEditEmail] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editName, setEditName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editCity, setEditCity] = useState('');
@@ -55,20 +62,22 @@ export default function UsersPage() {
   const [editError, setEditError] = useState<string | null>(null);
 
   const [roleUser, setRoleUser] = useState<User | null>(null);
-  const [newRole, setNewRole] = useState<UserRole>('GeneralManager');
+  const [newRole, setNewRole] = useState<UserRole>('General Manager');
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
   useEffect(() => {
-    if (!isAdmin) {
-      router.replace('/customers');
+    if (!permissionsLoaded) return;
+    if (!canAccessUsers) {
+      router.replace('/home');
       return;
     }
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
+        await fetchRoles();
         await fetchUsers(roleFilter || undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
@@ -77,23 +86,23 @@ export default function UsersPage() {
       }
     };
     load();
-  }, [isAdmin, router, fetchUsers, roleFilter, t]);
+  }, [permissionsLoaded, canAccessUsers, router, fetchUsers, fetchRoles, roleFilter, t]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setCreateError(null);
     const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-    if (!trimmedName || !trimmedEmail || !password) {
-      setCreateError(t('emailPasswordRequired'));
+    const trimmedPhone = phoneNumber.trim();
+    if (!trimmedName || !trimmedPhone || !password) {
+      setCreateError(t('phonePasswordRequired'));
       return;
     }
     try {
-      await createUser({ name: trimmedName, email: trimmedEmail, password, role });
+      await createUser({ name: trimmedName, phoneNumber: trimmedPhone, password, role });
       setName('');
-      setEmail('');
+      setPhoneNumber('');
       setPassword('');
-      setRole('GeneralManager');
+      setRole('General Manager');
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     }
@@ -101,7 +110,7 @@ export default function UsersPage() {
 
   const openEdit = (user: User) => {
     setEditUser(user);
-    setEditEmail(user.email ?? '');
+    setEditPhoneNumber(user.phoneNumber ?? '');
     setEditName(user.name ?? '');
     setEditLastName(user.lastName ?? '');
     setEditCity(user.city ?? '');
@@ -115,7 +124,7 @@ export default function UsersPage() {
     setEditError(null);
     try {
       await updateUser(editUser.id, {
-        email: editEmail.trim() || undefined,
+        phoneNumber: editPhoneNumber.trim() || undefined,
         name: editName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
         city: editCity.trim() || undefined,
@@ -130,7 +139,7 @@ export default function UsersPage() {
 
   const openChangeRole = (user: User) => {
     setRoleUser(user);
-    setNewRole((user.role as UserRole) || 'GeneralManager');
+    setNewRole((user.role as UserRole) || 'General Manager');
     setRoleError(null);
   };
 
@@ -157,10 +166,12 @@ export default function UsersPage() {
     }
   };
 
-  if (!isAdmin) {
+  if (!permissionsLoaded || !canAccessUsers) {
     return (
       <main className="min-h-full bg-transparent">
-        <p className="text-slate-800">{t('loading')}</p>
+        <p className="text-slate-800" suppressHydrationWarning>
+          {t('loading')}
+        </p>
       </main>
     );
   }
@@ -168,7 +179,9 @@ export default function UsersPage() {
   if (loading) {
     return (
       <main className="min-h-full bg-transparent">
-        <p className="text-slate-800">{t('loadingUsers')}</p>
+        <p className="text-slate-800" suppressHydrationWarning>
+          {t('loadingUsers')}
+        </p>
       </main>
     );
   }
@@ -196,6 +209,7 @@ export default function UsersPage() {
               </span>
             </div>
 
+            {canCreateUser && (
             <form onSubmit={handleCreate} className="flex flex-col gap-2">
               <div>
                 <input
@@ -207,11 +221,11 @@ export default function UsersPage() {
               </div>
               <div className="grid gap-2 md:grid-cols-2">
                 <input
-                  type="email"
+                  type="tel"
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-black focus:border-slate-400 focus:ring-0"
-                  placeholder={t('email')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('phoneNumber')}
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
                 />
                 <input
                   type="password"
@@ -230,9 +244,9 @@ export default function UsersPage() {
                   value={role}
                   onChange={(e) => setRole(e.target.value as UserRole)}
                 >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(roleLabelKey(r))}
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.name}>
+                      {t(roleLabelKey(r.name))}
                     </option>
                   ))}
                 </select>
@@ -247,8 +261,25 @@ export default function UsersPage() {
                 {t('createUser')}
               </button>
             </form>
+            )}
+
+            {canCreateUser && (
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-xs text-slate-700">
+                <div className="font-semibold text-slate-900">{t('roles')}</div>
+                <div className="text-slate-600">{t('createAndAssignRoles')}</div>
+              </div>
+              <Link
+                href="/roles/new"
+                className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+              >
+                {t('newRole')}
+              </Link>
+            </div>
+            )}
           </div>
 
+          {canSearchUsers && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">
               {t('quickSearch')}
@@ -264,6 +295,7 @@ export default function UsersPage() {
               />
             </div>
           </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -279,9 +311,9 @@ export default function UsersPage() {
                 onChange={(e) => setRoleFilter((e.target.value || '') as UserRole | '')}
               >
                 <option value="">{t('sortDefault')}</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {t(roleLabelKey(r))}
+                {roles.map((r) => (
+                  <option key={r.id} value={r.name}>
+                    {t(roleLabelKey(r.name))}
                   </option>
                 ))}
               </select>
@@ -298,10 +330,10 @@ export default function UsersPage() {
                 <div className="min-w-0 flex flex-1 items-center justify-between gap-4 text-xs md:text-sm">
                   <div className="min-w-0 truncate">
                     <span className="font-semibold text-gray-800">
-                      {user.name || user.email}
+                      {user.name || user.phoneNumber}
                     </span>
                     {user.name && (
-                      <span className="ms-1 text-slate-500">{user.email}</span>
+                      <span className="ms-1 text-slate-500">{user.phoneNumber}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
@@ -314,6 +346,7 @@ export default function UsersPage() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {canEditUser && (
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
@@ -323,6 +356,8 @@ export default function UsersPage() {
                     <FaPencilAlt size={12} className="me-1" />
                     {t('edit')}
                   </button>
+                  )}
+                  {canChangeRole && (
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-xs text-amber-700 hover:bg-amber-50"
@@ -332,12 +367,16 @@ export default function UsersPage() {
                     <FaUserTag size={12} className="me-1" />
                     {t('changeRole')}
                   </button>
+                  )}
+                  {canViewUser && (
                   <Link
                     href={`/users/${user.id}`}
                     className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
                   >
                     {t('view')}
                   </Link>
+                  )}
+                  {canDeleteUser && (
                   <button
                     type="button"
                     className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
@@ -347,6 +386,7 @@ export default function UsersPage() {
                     <FaTrash size={12} className="me-1" />
                     {t('delete')}
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -370,13 +410,13 @@ export default function UsersPage() {
             <form onSubmit={handleEditSave} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600">
-                  {t('email')}
+                  {t('phoneNumber')}
                 </label>
                 <input
-                  type="email"
+                  type="tel"
                   className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-sm text-black"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
+                  value={editPhoneNumber}
+                  onChange={(e) => setEditPhoneNumber(e.target.value)}
                 />
               </div>
               <div>
@@ -438,7 +478,7 @@ export default function UsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">
-              {t('changeRole')} — {roleUser.email}
+              {t('changeRole')} — {roleUser.phoneNumber}
             </h2>
             <form onSubmit={handleChangeRoleSubmit} className="space-y-3">
               <div>
@@ -450,9 +490,9 @@ export default function UsersPage() {
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value as UserRole)}
                 >
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(roleLabelKey(r))}
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.name}>
+                      {t(roleLabelKey(r.name))}
                     </option>
                   ))}
                 </select>

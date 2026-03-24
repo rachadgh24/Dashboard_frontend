@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const NOTIFICATIONS_API = `${API_BASE}/notifications`;
@@ -42,22 +43,17 @@ export const useNotificationStore = create<NotificationsStore>((set, get) => ({
   fetchNotifications: async () => {
     set({ loading: true, error: null });
     try {
-      const res = await fetch(NOTIFICATIONS_API, {
-        cache: 'no-store',
-        headers: getAuthHeaders(),
+      const raw = await apiFetch<unknown[]>(NOTIFICATIONS_API, { cache: 'no-store', headers: getAuthHeaders() });
+      const notifications: Notification[] = (raw || []).map((item) => {
+        const obj = item as Record<string, unknown>;
+        return {
+          id: Number((obj as { id?: number }).id),
+          message: String((obj as { message?: string }).message ?? ''),
+          createdAt: normalizeCreatedAt((obj as { createdAt?: unknown }).createdAt),
+          name: (obj as { name?: string }).name,
+          role: (obj as { role?: string }).role,
+        };
       });
-      if (!res.ok) {
-        if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-        throw new Error('Failed to fetch notifications');
-      }
-      const raw: unknown[] = await res.json();
-      const notifications: Notification[] = (raw || []).map((item: Record<string, unknown>) => ({
-        id: Number((item as { id?: number }).id),
-        message: String((item as { message?: string }).message ?? ''),
-        createdAt: normalizeCreatedAt((item as { createdAt?: unknown }).createdAt),
-        name: (item as { name?: string }).name,
-        role: (item as { role?: string }).role,
-      }));
       set({ notifications, loading: false, error: null });
     } catch (err) {
       set({
@@ -69,14 +65,7 @@ export const useNotificationStore = create<NotificationsStore>((set, get) => ({
 
   removeNotification: async (id: number) => {
     try {
-      const res = await fetch(`${NOTIFICATIONS_API}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-        throw new Error('Failed to delete notification');
-      }
+      await apiFetch<null>(`${NOTIFICATIONS_API}/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       set((state) => ({
         notifications: state.notifications.filter((n) => n.id !== id),
       }));
@@ -87,14 +76,7 @@ export const useNotificationStore = create<NotificationsStore>((set, get) => ({
 
   clearAll: async () => {
     try {
-      const res = await fetch(NOTIFICATIONS_API, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-        throw new Error('Failed to clear notifications');
-      }
+      await apiFetch<null>(NOTIFICATIONS_API, { method: 'DELETE', headers: getAuthHeaders() });
       set({ notifications: [] });
     } catch {
       // leave state unchanged on failure

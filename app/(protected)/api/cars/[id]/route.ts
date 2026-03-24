@@ -1,3 +1,5 @@
+import { apiFetch } from '@/lib/apiClient';
+
 const CARS_API = 'https://localhost:7190/Cars';
 
 export async function PUT(
@@ -6,14 +8,12 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const res = await fetch(`${CARS_API}/${id}`, {
+  const data = await apiFetch<unknown>(`${CARS_API}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('Failed to update car');
-  const data = await res.json();
-  return Response.json(data);
+  return Response.json({ data });
 }
 
 export async function DELETE(
@@ -21,7 +21,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const res = await fetch(`${CARS_API}/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete car');
-  return new Response(null, { status: 204 });
+  await apiFetch<null>(`${CARS_API}/${id}`, { method: 'DELETE' });
+  return Response.json({ data: null });
 }

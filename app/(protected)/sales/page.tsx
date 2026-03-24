@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCustomerStore } from '@/store/customersState';
+import { apiFetch } from '@/lib/apiClient';
+import { usePermissionsStore } from '@/store/permissionsState';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const CARS_API = `${API_BASE}/Cars`;
@@ -19,6 +21,10 @@ type Car = {
 
 export default function SalesPage() {
   const { t } = useTranslation();
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+  const canCreate = hasClaim('CreateCar');
+  const canEdit = hasClaim('EditCar');
+  const canDelete = hasClaim('DeleteCar');
   const { customers, fetchCustomers } = useCustomerStore();
   const [cars, setCars] = useState<Car[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,13 +53,10 @@ export default function SalesPage() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [countRes, dataRes] = await Promise.all([
-          fetch(`${CARS_API}/count`, { headers: getAuthHeaders() }),
-          fetch(`${CARS_API}/paginate?page=1`, { headers: getAuthHeaders() }),
+        const [total, data] = await Promise.all([
+          apiFetch<number>(`${CARS_API}/count`, { headers: getAuthHeaders() }),
+          apiFetch<Car[]>(`${CARS_API}/paginate?page=1`, { headers: getAuthHeaders() }),
         ]);
-        if (!countRes.ok || !dataRes.ok) throw new Error(t('failedToLoadCars'));
-        const total: number = await countRes.json();
-        const data: Car[] = await dataRes.json();
         const ps = data.length || 1;
         setPageSize(ps);
         setCars(data);
@@ -72,18 +75,15 @@ export default function SalesPage() {
     if (page < 1) return;
     setLoading(true);
     try {
-      const [countRes, dataRes] = await Promise.all([
-        fetch(`${CARS_API}/count`, { headers: getAuthHeaders() }),
-        fetch(`${CARS_API}/paginate?page=${page}`, { headers: getAuthHeaders() }),
+      const [total, data] = await Promise.all([
+        apiFetch<number>(`${CARS_API}/count`, { headers: getAuthHeaders() }),
+        apiFetch<Car[]>(`${CARS_API}/paginate?page=${page}`, { headers: getAuthHeaders() }),
       ]);
-      if (!countRes.ok || !dataRes.ok) return;
-      const total: number = await countRes.json();
-      const data: Car[] = await dataRes.json();
       const newTotalPages = Math.max(1, Math.ceil(total / pageSize));
       const safePage = Math.min(page, newTotalPages);
       if (safePage < page) {
-        const safeRes = await fetch(`${CARS_API}/paginate?page=${safePage}`, { headers: getAuthHeaders() });
-        setCars(await safeRes.json());
+        const safeData = await apiFetch<Car[]>(`${CARS_API}/paginate?page=${safePage}`, { headers: getAuthHeaders() });
+        setCars(safeData ?? []);
         setCurrentPage(safePage);
       } else {
         setCars(data);
@@ -96,7 +96,7 @@ export default function SalesPage() {
   };
 
   if (loading) {
-    return <main className="text-slate-800">{t('loadingCars')}</main>;
+    return <main className="text-slate-800">Loading cars...</main>;
   }
 
   if (error) {
@@ -119,13 +119,14 @@ export default function SalesPage() {
             </span>
           </div>
 
+          {canCreate && (
           <form
             className="flex flex-col gap-2"
             onSubmit={async (e) => {
               e.preventDefault();
               if (!model.trim() || !maxSpeed.trim() || selectedUserId == null)
                 return;
-              const res = await fetch(CARS_API, {
+              await apiFetch<Car | { car?: Car }>(CARS_API, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -137,7 +138,6 @@ export default function SalesPage() {
                   customerId: selectedUserId,
                 }),
               });
-              if (!res.ok) return;
               setModel('');
               setMaxSpeed('');
               setSelectedUserId(null);
@@ -187,6 +187,7 @@ export default function SalesPage() {
               {t('addCar')}
             </button>
           </form>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -240,33 +241,25 @@ export default function SalesPage() {
 
                   <div className="mt-2 flex items-center justify-end gap-2">
                     {isEditing ? (
+                      canEdit && (
                       <>
                         <button
                           type="button"
                           className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white"
                           onClick={async () => {
-                            const res = await fetch(
-                              `${CARS_API}/${car.id}`,
-                              {
-                                method: 'PUT',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  ...getAuthHeaders(),
-                                },
-                                body: JSON.stringify({
-                                  id: car.id,
-                                  model: editModel.trim(),
-                                  maxSpeed: Number(editMaxSpeed),
-                                }),
+                            const updated = await apiFetch<Car>(`${CARS_API}/${car.id}`, {
+                              method: 'PUT',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                ...getAuthHeaders(),
                               },
-                            );
-                            if (!res.ok) return;
-                            const raw = await res.json();
-                            const updated: Car = {
-                              id: raw.id ?? raw.Id ?? car.id,
-                              model: raw.model ?? raw.Model ?? '',
-                              maxSpeed: Number(raw.maxSpeed ?? raw.MaxSpeed ?? 0),
-                            };
+                              body: JSON.stringify({
+                                id: car.id,
+                                model: editModel.trim(),
+                                maxSpeed: Number(editMaxSpeed),
+                                customerId: car.customerId ?? car.CustomerId,
+                              }),
+                            });
                             setCars((prev) =>
                               prev.map((c) => (c.id === car.id ? updated : c)),
                             );
@@ -283,7 +276,9 @@ export default function SalesPage() {
                           {t('cancel')}
                         </button>
                       </>
+                      )
                     ) : (
+                      canEdit && (
                       <button
                         type="button"
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800"
@@ -295,24 +290,23 @@ export default function SalesPage() {
                       >
                         {t('edit')}
                       </button>
+                      )
                     )}
+                    {canDelete && (
                     <button
                       type="button"
                       className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white"
                       onClick={async () => {
-                        const res = await fetch(
-                          `${CARS_API}/${car.id}`,
-                          {
-                            method: 'DELETE',
-                            headers: getAuthHeaders(),
-                          },
-                        );
-                        if (!res.ok) return;
+                        await apiFetch<null>(`${CARS_API}/${car.id}`, {
+                          method: 'DELETE',
+                          headers: getAuthHeaders(),
+                        });
                         await goToPage(currentPage);
                       }}
                     >
                       {t('delete')}
                     </button>
+                    )}
                   </div>
                 </div>
               );

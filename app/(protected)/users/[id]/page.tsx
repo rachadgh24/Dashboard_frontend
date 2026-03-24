@@ -9,26 +9,28 @@ import {
   type User,
   type UserRole,
 } from '@/store/usersState';
-import { useIsAdmin } from '@/lib/useUserRole';
-
-const ROLES: UserRole[] = ['Admin', 'SocialMediaManager', 'GeneralManager'];
+import { usePermissionsStore } from '@/store/permissionsState';
 
 function roleLabelKey(role: UserRole): string {
-  const map: Record<UserRole, string> = {
-    Admin: 'roleAdmin',
-    SocialMediaManager: 'roleSocialMediaManager',
-    GeneralManager: 'roleGeneralManager',
-  };
-  return map[role] ?? role;
+  const normalized = String(role).toLowerCase().replace(/\s/g, '');
+  if (normalized === 'admin') return 'roleAdmin';
+  if (normalized === 'socialmediamanager') return 'roleSocialMediaManager';
+  if (normalized === 'generalmanager') return 'roleGeneralManager';
+  return role;
 }
 
 export default function UserDetailPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useParams();
-  const isAdmin = useIsAdmin();
+  const canAccessUsers = usePermissionsStore((s) => s.hasClaim('ViewUsers'));
+  const canEdit = usePermissionsStore((s) => s.hasClaim('EditUser'));
+  const canDelete = usePermissionsStore((s) => s.hasClaim('DeleteUser'));
+  const canChangeRole = usePermissionsStore((s) => s.hasClaim('ChangeUserRole'));
   const id = params.id as string;
 
+  const roles = useUserStore((state) => state.roles);
+  const fetchRoles = useUserStore((state) => state.fetchRoles);
   const fetchUser = useUserStore((state) => state.fetchUser);
   const updateUser = useUserStore((state) => state.updateUser);
   const deleteUser = useUserStore((state) => state.deleteUser);
@@ -37,7 +39,7 @@ export default function UserDetailPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
   const [city, setCity] = useState('');
@@ -47,19 +49,20 @@ export default function UserDetailPage() {
   const [roleSaving, setRoleSaving] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) {
-      router.replace('/customers');
+    if (!canAccessUsers) {
+      router.replace('/home');
       return;
     }
     if (!id) return;
     const load = async () => {
+      await fetchRoles();
       setLoading(true);
       setError(null);
       try {
         const data = await fetchUser(id);
         if (data) {
           setUser(data);
-          setEmail(data.email ?? '');
+          setPhoneNumber(data.phoneNumber ?? '');
           setName(data.name ?? '');
           setLastName(data.lastName ?? '');
           setCity(data.city ?? '');
@@ -74,7 +77,7 @@ export default function UserDetailPage() {
       }
     };
     load();
-  }, [isAdmin, router, id, fetchUser, t]);
+  }, [canAccessUsers, router, id, fetchUser, t]);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -83,7 +86,7 @@ export default function UserDetailPage() {
     setSaveError(null);
     try {
       await updateUser(user.id, {
-        email: email.trim() || undefined,
+        phoneNumber: phoneNumber.trim() || undefined,
         name: name.trim() || undefined,
         lastName: lastName.trim() || undefined,
         city: city.trim() || undefined,
@@ -92,7 +95,7 @@ export default function UserDetailPage() {
         prev
           ? {
               ...prev,
-              email: email.trim() || prev.email,
+              phoneNumber: phoneNumber.trim() || prev.phoneNumber,
               name: name.trim() || prev.name,
               lastName: lastName.trim() || prev.lastName,
               city: city.trim() || prev.city,
@@ -130,7 +133,7 @@ export default function UserDetailPage() {
     }
   };
 
-  if (!isAdmin) {
+  if (!canAccessUsers) {
     return (
       <main className="flex min-h-full items-center justify-center bg-transparent py-8">
         <div className="text-gray-700">{t('loading')}</div>
@@ -172,19 +175,20 @@ export default function UserDetailPage() {
     <main className="flex min-h-full items-center justify-center bg-transparent py-8">
       <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8">
         <h1 className="mb-6 text-2xl font-semibold text-gray-900">
-          {t('editUser')} (ID: {user.id})
+          {canEdit ? t('editUser') : t('view')} (ID: {user.id})
         </h1>
 
+        {canEdit ? (
         <form onSubmit={handleSave} className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              {t('email')}
+              {t('phoneNumber')}
             </label>
             <input
-              type="email"
+              type="tel"
               className="mt-1 w-full rounded-lg border border-slate-200 p-2.5 text-black"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
             />
           </div>
           <div>
@@ -236,7 +240,19 @@ export default function UserDetailPage() {
             </Link>
           </div>
         </form>
+        ) : (
+          <div className="space-y-2 text-sm text-gray-700">
+            <p><span className="font-medium">{t('phoneNumber')}:</span> {phoneNumber}</p>
+            <p><span className="font-medium">{t('name')}:</span> {name} {lastName}</p>
+            <p><span className="font-medium">{t('city')}:</span> {city}</p>
+            <p><span className="font-medium">{t('role')}:</span> {t(roleLabelKey(role))}</p>
+            <Link href="/users" className="inline-block mt-4 rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              {t('back')}
+            </Link>
+          </div>
+        )}
 
+        {canChangeRole && (
         <div className="mt-6 border-t border-slate-200 pt-6">
           <h2 className="mb-2 text-sm font-semibold text-gray-900">
             {t('changeRole')}
@@ -251,9 +267,9 @@ export default function UserDetailPage() {
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
               >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {t(roleLabelKey(r))}
+                {roles.map((r) => (
+                  <option key={r.id} value={r.name}>
+                    {t(roleLabelKey(r.name))}
                   </option>
                 ))}
               </select>
@@ -267,7 +283,9 @@ export default function UserDetailPage() {
             </button>
           </form>
         </div>
+        )}
 
+        {canDelete && (
         <div className="mt-6 flex justify-end border-t border-slate-200 pt-6">
           <button
             type="button"
@@ -277,6 +295,7 @@ export default function UserDetailPage() {
             {t('deleteUser')}
           </button>
         </div>
+        )}
       </div>
     </main>
   );

@@ -9,7 +9,7 @@ import { useNotificationStore } from '@/store/notificationsState';
 
 type HeaderUser = {
   name: string;
-  email: string;
+  phoneNumber: string;
 };
 
 type DashboardRole = 'Admin' | 'Social Media Manager' | 'General Manager' | null;
@@ -71,14 +71,14 @@ function formatNotificationTime(ms: number): string {
   if (diff < 60_000) return 'Just now';
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
-  return d.toLocaleDateString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
 const Header = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [currentUser, setCurrentUser] = useState<HeaderUser>({ name: '', email: '' });
+  const [currentUser, setCurrentUser] = useState<HeaderUser>({ name: '', phoneNumber: '' });
   const [role, setRole] = useState<DashboardRole>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -93,8 +93,8 @@ const Header = () => {
   useEffect(() => {
     setMounted(true);
     const name = localStorage.getItem('admin_name') ?? '';
-    const email = localStorage.getItem('admin_email') ?? '';
-    setCurrentUser({ name, email });
+    const phoneNumber = localStorage.getItem('admin_phone') ?? '';
+    setCurrentUser({ name, phoneNumber });
     setRole(getDisplayRole());
   }, []);
 
@@ -128,7 +128,7 @@ const Header = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('admin_name');
-    localStorage.removeItem('admin_email');
+    localStorage.removeItem('admin_phone');
     router.push('/logIn');
   };
 
@@ -226,7 +226,7 @@ const Header = () => {
           <ProfileIcon />
           <div className="flex flex-col text-xs leading-tight text-end">
             <span className="font-semibold text-slate-800">{currentUser.name}</span>
-            <span className="text-slate-500">{currentUser.email}</span>
+            <span className="text-slate-500">{currentUser.phoneNumber}</span>
           </div>
         </div>
 

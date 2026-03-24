@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiFetch } from '@/lib/apiClient';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const CUSTOMERS_API = `${API_BASE}/Customers`;
@@ -12,19 +13,11 @@ const getAuthHeaders = () => {
 };
 
 const searchCustomersRequest = async (query: string): Promise<Customer[]> => {
-  const res = await fetch(`${CUSTOMERS_API}/search?query=${encodeURIComponent(query)}`, {
+  const data = await apiFetch<Customer[]>(`${CUSTOMERS_API}/search?query=${encodeURIComponent(query)}`, {
     cache: 'no-store',
     headers: getAuthHeaders(),
   });
-
-  if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error('Unauthorized: please sign in again.');
-    }
-    throw new Error('Failed to search customers');
-  }
-
-  return res.json();
+  return data ?? [];
 };
 
 export interface Car {
@@ -86,52 +79,24 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
     SelectedCustomer: undefined,
 
     fetchCustomers: async () => {
-      const res = await fetch(CUSTOMERS_API, {
-        cache: 'no-store',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to fetch customers');
-      }
-      const data: Customer[] = await res.json();
-      set({ customers: data });
-      await syncFilteredCustomers(data);
+      const data = await apiFetch<Customer[]>(CUSTOMERS_API, { cache: 'no-store', headers: getAuthHeaders() });
+      const customers = data ?? [];
+      set({ customers });
+      await syncFilteredCustomers(customers);
     },
 
     fetchCustomersPaginate: async (page, sortBy) => {
       const url = sortBy
         ? `${CUSTOMERS_API}/paginate?page=${page}&sortBy=${encodeURIComponent(sortBy)}`
         : `${CUSTOMERS_API}/paginate?page=${page}`;
-      const res = await fetch(url, {
-        cache: 'no-store',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to fetch customers');
-      }
-      const data: Customer[] = await res.json();
-      set({ customers: data, filteredCustomers: data });
-      return data.length;
+      const data = await apiFetch<Customer[]>(url, { cache: 'no-store', headers: getAuthHeaders() });
+      const customers = data ?? [];
+      set({ customers, filteredCustomers: customers });
+      return customers.length;
     },
 
     fetchCustomer: async (id: string) => {
-      const res = await fetch(`${CUSTOMERS_API}/${id}`, {
-        cache: 'no-store',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to fetch customer');
-      }
-      const data: Customer = await res.json();
+      const data = await apiFetch<Customer>(`${CUSTOMERS_API}/${id}`, { cache: 'no-store', headers: getAuthHeaders() });
       set({ SelectedCustomer: data, filteredCustomers: [data] });
     },
 
@@ -148,21 +113,13 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
     },
 
     createCustomer: async (payload: CreateCustomerPayload) => {
-      const res = await fetch(CUSTOMERS_API, {
+      const data = await apiFetch<{ customer?: Customer } | Customer>(CUSTOMERS_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to create customer');
-      }
-      const body = await res.json();
-      const created: Customer = body.customer ?? body;
+      const created: Customer = (data as { customer?: Customer })?.customer ?? (data as Customer);
       const customers = [...get().customers, created];
-
       set({ customers });
       await syncFilteredCustomers(customers);
     },
@@ -189,21 +146,10 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
     },
 
     deleteCustomer: async (id) => {
-      const res = await fetch(`${CUSTOMERS_API}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to delete customer');
-      }
-
+      await apiFetch<null>(`${CUSTOMERS_API}/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       const customers = get().customers.filter((c) => c.id !== id);
       const selectedCustomer =
         get().SelectedCustomer?.id === id ? undefined : get().SelectedCustomer;
-
       set({ customers, SelectedCustomer: selectedCustomer });
       await syncFilteredCustomers(customers);
     },

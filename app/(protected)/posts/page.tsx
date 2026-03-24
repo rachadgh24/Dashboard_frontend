@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { apiFetch } from '@/lib/apiClient';
+import { usePermissionsStore } from '@/store/permissionsState';
 
 const POSTS_API = 'https://localhost:7185/Posts';
 
@@ -41,7 +43,7 @@ function postAuthorName(p: Post) {
 function formatDate(iso: string) {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleString(undefined, {
       dateStyle: 'short',
       timeStyle: 'short',
     });
@@ -52,6 +54,10 @@ function formatDate(iso: string) {
 
 export default function PostsPage() {
   const { t } = useTranslation();
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+  const canCreate = hasClaim('CreatePost');
+  const canEdit = hasClaim('EditPost');
+  const canDelete = hasClaim('DeletePost');
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,13 +76,10 @@ export default function PostsPage() {
     const init = async () => {
       try {
         const headers = getAuthHeaders();
-        const [countRes, dataRes] = await Promise.all([
-          fetch(`${POSTS_API}/count`, { headers }),
-          fetch(`${POSTS_API}/paginate?page=1`, { headers }),
+        const [total, data] = await Promise.all([
+          apiFetch<number>(`${POSTS_API}/count`, { headers }),
+          apiFetch<Post[]>(`${POSTS_API}/paginate?page=1`, { headers }),
         ]);
-        if (!countRes.ok || !dataRes.ok) throw new Error(t('failedToFetchPosts'));
-        const total: number = await countRes.json();
-        const data: Post[] = await dataRes.json();
         const ps = data.length || 1;
         setPageSize(ps);
         setPosts(data);
@@ -96,19 +99,16 @@ export default function PostsPage() {
     setLoading(true);
     try {
       const headers = getAuthHeaders();
-      const [countRes, dataRes] = await Promise.all([
-        fetch(`${POSTS_API}/count`, { headers }),
-        fetch(`${POSTS_API}/paginate?page=${page}`, { headers }),
+      const [total, data] = await Promise.all([
+        apiFetch<number>(`${POSTS_API}/count`, { headers }),
+        apiFetch<Post[]>(`${POSTS_API}/paginate?page=${page}`, { headers }),
       ]);
-      if (!countRes.ok || !dataRes.ok) throw new Error(t('failedToFetchPosts'));
-      const total: number = await countRes.json();
-      const data: Post[] = await dataRes.json();
       const ps = pageSize;
       const newTotalPages = Math.max(1, Math.ceil(total / ps));
       const safePage = Math.min(page, newTotalPages);
       if (safePage < page) {
-        const safeRes = await fetch(`${POSTS_API}/paginate?page=${safePage}`, { headers });
-        setPosts(await safeRes.json());
+        const safeData = await apiFetch<Post[]>(`${POSTS_API}/paginate?page=${safePage}`, { headers });
+        setPosts(safeData ?? []);
         setCurrentPage(safePage);
       } else {
         setPosts(data);
@@ -124,7 +124,7 @@ export default function PostsPage() {
   };
 
   if (loading) {
-    return <main className="text-slate-800">{t('loadingPosts')}</main>;
+    return <main className="text-slate-800">Loading posts...</main>;
   }
 
   if (error) {
@@ -147,12 +147,13 @@ export default function PostsPage() {
             </span>
           </div>
 
+          {canCreate && (
           <form
             className="flex flex-col gap-3"
             onSubmit={async (e) => {
               e.preventDefault();
               if (!title.trim() || !content.trim() || !authorName.trim()) return;
-              const res = await fetch(POSTS_API, {
+              await apiFetch<Post | { post?: Post }>(POSTS_API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
@@ -162,7 +163,6 @@ export default function PostsPage() {
                   createdAt: new Date().toISOString(),
                 }),
               });
-              if (!res.ok) return;
               setTitle('');
               setContent('');
               setAuthorName('');
@@ -194,6 +194,7 @@ export default function PostsPage() {
               {t('addPost')}
             </button>
           </form>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -252,6 +253,7 @@ export default function PostsPage() {
 
                   <div className="mt-2 flex items-center justify-end gap-2">
                     {isEditing ? (
+                      canEdit && (
                       <>
                         <button
                           type="button"
@@ -259,7 +261,7 @@ export default function PostsPage() {
                           onClick={async () => {
                             const currentPostId = post.id;
                             try {
-                              const res = await fetch(
+                              const updated = await apiFetch<Post>(
                                 `${POSTS_API}/${currentPostId}`,
                                 {
                                   method: 'PUT',
@@ -276,15 +278,6 @@ export default function PostsPage() {
                                   }),
                                 },
                               );
-                              if (!res.ok) return;
-                              const raw = await res.json();
-                              const updated: Post = {
-                                id: raw.id ?? raw.Id ?? currentPostId,
-                                title: raw.title ?? raw.Title ?? '',
-                                content: raw.content ?? raw.Content ?? '',
-                                createdAt: raw.createdAt ?? raw.CreatedAt ?? '',
-                                authorName: raw.authorName ?? raw.AuthorName ?? '',
-                              };
                               setPosts((prev) =>
                                 prev.map((p) => {
                                   const pId = p.id ?? (p as { Id?: number }).Id;
@@ -306,7 +299,9 @@ export default function PostsPage() {
                           {t('cancel')}
                         </button>
                       </>
+                      )
                     ) : (
+                      canEdit && (
                       <button
                         type="button"
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800"
@@ -319,21 +314,23 @@ export default function PostsPage() {
                       >
                         {t('edit')}
                       </button>
+                      )
                     )}
+                    {canDelete && (
                     <button
                       type="button"
                       className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white"
                       onClick={async () => {
-                        const res = await fetch(
+                        await apiFetch<null>(
                           `${POSTS_API}/${post.id}`,
                           { method: 'DELETE', headers: getAuthHeaders() },
                         );
-                        if (!res.ok) return;
                         await goToPage(currentPage);
                       }}
                     >
                       {t('delete')}
                     </button>
+                    )}
                   </div>
                 </div>
               );
