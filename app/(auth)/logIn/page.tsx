@@ -5,20 +5,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { API_BASE } from '@/lib/apiBase';
+import { apiFetch } from '@/lib/apiClient';
+import { usePermissionsStore } from '@/store/permissionsState';
+import { getLandingRoute } from '@/lib/landingRoute';
 
 type LoginPayload = {
-  email: string;
+  phoneNumber: string;
   password: string;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 export default function LoginPage() {
   const { t, ready } = useTranslation();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState<LoginPayload>({
-    email: '',
+    phoneNumber: '',
     password: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,84 +31,44 @@ export default function LoginPage() {
   }, []);
 
   const canSubmit = useMemo(
-    () => form.email.trim() !== '' && form.password.trim() !== '' && !isSubmitting,
-    [form.email, form.password, isSubmitting],
+    () => form.phoneNumber.trim() !== '' && form.password.trim() !== '' && !isSubmitting,
+    [form.phoneNumber, form.password, isSubmitting],
   );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage('');
 
-    if (!form.email.trim() || !form.password.trim()) {
-      setErrorMessage(t('emailPasswordRequired'));
+    if (!form.phoneNumber.trim() || !form.password.trim()) {
+      setErrorMessage(t('phonePasswordRequired'));
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE}/api/Auth/login`, {
+      const data = await apiFetch<{ token: string }>(`${API_BASE}/api/Auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: form.email.trim(),
+          phoneNumber: form.phoneNumber.trim(),
           password: form.password,
         }),
       });
 
-      if (!response.ok) {
-        const responseText = await response.text();
-        setErrorMessage(responseText || t('loginFailed'));
-        return;
-      }
-
-      const data: unknown = await response.json();
-      const token =
-        typeof data === 'object' && data !== null && 'token' in data
-          ? String((data as { token: string }).token)
-          : '';
-
+      const token = data?.token ?? '';
       if (!token) {
         setErrorMessage(t('noTokenReturned'));
         return;
       }
 
       localStorage.setItem('token', token);
+      localStorage.setItem('admin_phone', form.phoneNumber.trim());
 
-      const adminData = data as Record<string, unknown>;
-      const str = (keys: string[]) => {
-        for (const k of keys) {
-          const v = adminData[k];
-          if (typeof v === 'string' && v.trim()) return v.trim();
-        }
-        return '';
-      };
-      const name = str(['name', 'Name', 'fullName', 'FullName', 'firstName', 'FirstName']);
-      const email = str(['email', 'Email']) || form.email.trim();
-      if (name) localStorage.setItem('admin_name', name);
-      localStorage.setItem('admin_email', email);
-
-      const role = (() => {
-        try {
-          const payload = token.split('.')[1];
-          if (!payload) return null;
-          const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-          const json = decodeURIComponent(
-            atob(base64)
-              .split('')
-              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-              .join('')
-          );
-          const claims = JSON.parse(json) as Record<string, unknown>;
-          const val = claims['role'] ?? claims['Role'];
-          const v = String(val ?? '').toLowerCase().replace(/\s/g, '');
-          return v === 'admin' ? 'admin' : null;
-        } catch {
-          return null;
-        }
-      })();
-      router.push(role === 'admin' ? '/home' : '/customers');
-    } catch {
-      setErrorMessage(t('couldNotConnect'));
+      await usePermissionsStore.getState().fetchPermissions();
+      const landing = getLandingRoute(usePermissionsStore.getState().hasClaim);
+      router.push(landing);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : t('couldNotConnect'));
     } finally {
       setIsSubmitting(false);
     }
@@ -145,10 +107,10 @@ export default function LoginPage() {
 
         <form className="space-y-4" onSubmit={onSubmit}>
           <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-            placeholder={t('email')}
+            type="tel"
+            value={form.phoneNumber}
+            onChange={(e) => setForm((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+            placeholder={t('phoneNumber')}
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400"
           />
 

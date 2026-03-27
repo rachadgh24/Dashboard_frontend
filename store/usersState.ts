@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
+import { API_BASE } from '@/lib/apiBase';
+import { apiFetch } from '@/lib/apiClient';
 const USERS_API = `${API_BASE}/Users`;
+const ROLES_API = `${API_BASE}/Roles`;
 
 const getAuthHeaders = () => {
   const headers: Record<string, string> = {};
@@ -11,11 +12,16 @@ const getAuthHeaders = () => {
   return headers;
 };
 
-export type UserRole = 'Admin' | 'SocialMediaManager' | 'GeneralManager';
+export type UserRole = string;
+
+export interface Role {
+  id: number;
+  name: string;
+}
 
 export interface User {
   id: number;
-  email: string;
+  phoneNumber: string;
   role: UserRole;
   name?: string;
   lastName?: string;
@@ -24,13 +30,13 @@ export interface User {
 
 export interface CreateUserPayload {
   name: string;
-  email: string;
+  phoneNumber: string;
   password: string;
   role: UserRole;
 }
 
 export interface UpdateUserPayload {
-  email?: string;
+  phoneNumber?: string;
   name?: string;
   lastName?: string;
   city?: string;
@@ -39,10 +45,13 @@ export interface UpdateUserPayload {
 interface UserStore {
   users: User[];
   filteredUsers: User[];
+  roles: Role[];
   query: string;
   setQuery: (q: string) => void;
   setSelectedUser: (user: User) => void;
   fetchUsers: (role?: string) => Promise<void>;
+  fetchUsersPaginate: (page: number, pageSize: number, role?: string) => Promise<void>;
+  fetchRoles: () => Promise<void>;
   fetchUser: (id: string) => Promise<User | null>;
   createUser: (payload: CreateUserPayload) => Promise<void>;
   updateUser: (id: number, payload: UpdateUserPayload) => Promise<void>;
@@ -55,7 +64,7 @@ function filterUsersByQuery(users: User[], query: string): User[] {
   if (!q) return users;
   return users.filter(
     (u) =>
-      u.email?.toLowerCase().includes(q) ||
+      u.phoneNumber?.toLowerCase().includes(q) ||
       u.name?.toLowerCase().includes(q) ||
       u.lastName?.toLowerCase().includes(q) ||
       u.role?.toLowerCase().includes(q) ||
@@ -66,6 +75,7 @@ function filterUsersByQuery(users: User[], query: string): User[] {
 export const useUserStore = create<UserStore>((set, get) => ({
   users: [],
   filteredUsers: [],
+  roles: [],
   query: '',
 
   setQuery: (q) => {
@@ -77,90 +87,71 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   fetchUsers: async (role?: string) => {
     const url = role ? `${USERS_API}?role=${encodeURIComponent(role)}` : USERS_API;
-    const res = await fetch(url, {
+    const data = await apiFetch<User[]>(url, { cache: 'no-store', headers: getAuthHeaders() });
+    const query = get().query;
+    set({ users: data ?? [], filteredUsers: filterUsersByQuery(data ?? [], query) });
+  },
+
+  fetchUsersPaginate: async (page, pageSize, role) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (role) params.set('role', role);
+    const data = await apiFetch<User[]>(`${USERS_API}/paginate?${params.toString()}`, {
       cache: 'no-store',
       headers: getAuthHeaders(),
     });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      throw new Error('Failed to fetch users');
-    }
-    const data: User[] = await res.json();
     const query = get().query;
-    set({ users: data, filteredUsers: filterUsersByQuery(data, query) });
+    set({ users: data ?? [], filteredUsers: filterUsersByQuery(data ?? [], query) });
+  },
+
+  fetchRoles: async () => {
+    const data = await apiFetch<Role[]>(ROLES_API, { cache: 'no-store', headers: getAuthHeaders() });
+    set({ roles: data ?? [] });
   },
 
   fetchUser: async (id: string) => {
-    const res = await fetch(`${USERS_API}/${id}`, {
-      cache: 'no-store',
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      if (res.status === 404) return null;
-      throw new Error('Failed to fetch user');
+    try {
+      return await apiFetch<User | null>(`${USERS_API}/${id}`, { cache: 'no-store', headers: getAuthHeaders() });
+    } catch {
+      return null;
     }
-    return res.json();
   },
 
   createUser: async (payload: CreateUserPayload) => {
-    const res = await fetch(USERS_API, {
+    const data = await apiFetch<{ user?: User; message?: string }>(USERS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      throw new Error('Failed to create user');
-    }
-    const body = await res.json();
-    const created: User = body.user ?? body;
+    const created: User = data?.user ?? (data as unknown as User);
     const users = [...get().users, created];
     const query = get().query;
     set({ users, filteredUsers: filterUsersByQuery(users, query) });
   },
 
   updateUser: async (id, payload) => {
-    const res = await fetch(`${USERS_API}/${id}`, {
+    const updated = await apiFetch<User>(`${USERS_API}/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ id, ...payload }),
     });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      throw new Error('Failed to update user');
-    }
-    const updated: User = await res.json();
     const users = get().users.map((u) => (u.id === id ? updated : u));
     const query = get().query;
     set({ users, filteredUsers: filterUsersByQuery(users, query) });
   },
 
   deleteUser: async (id) => {
-    const res = await fetch(`${USERS_API}/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      throw new Error('Failed to delete user');
-    }
+    await apiFetch<null>(`${USERS_API}/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
     const users = get().users.filter((u) => u.id !== id);
     const query = get().query;
     set({ users, filteredUsers: filterUsersByQuery(users, query) });
   },
 
   changeRole: async (id, role) => {
-    const res = await fetch(`${USERS_API}/${id}/role`, {
+    const updated = await apiFetch<User>(`${USERS_API}/${id}/role`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ role }),
     });
-    if (!res.ok) {
-      if (res.status === 401) throw new Error('Unauthorized: please sign in again.');
-      throw new Error('Failed to change role');
-    }
-    const updated: User = await res.json();
     const users = get().users.map((u) => (u.id === id ? updated : u));
     const query = get().query;
     set({ users, filteredUsers: filterUsersByQuery(users, query) });

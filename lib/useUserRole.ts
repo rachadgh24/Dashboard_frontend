@@ -48,8 +48,9 @@ export function getUserRole(): UserRole {
   }
 }
 
-export function useIsAdmin(): boolean {
-  const [isAdmin, setIsAdmin] = useState(false);
+/** Returns true if admin, false if not admin, null while still determining (avoids redirect race). */
+export function useIsAdmin(): boolean | null {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     setIsAdmin(getUserRole() === 'admin');

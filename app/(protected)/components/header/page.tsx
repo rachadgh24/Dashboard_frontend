@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { FaBell, FaUserCircle, FaTimes } from 'react-icons/fa';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { useNotificationStore } from '@/store/notificationsState';
+import { createNotificationsConnection } from '@/lib/notificationsHub';
+import { normalizeCreatedAt, useNotificationStore } from '@/store/notificationsState';
 
 type HeaderUser = {
   name: string;
-  email: string;
+  phoneNumber: string;
 };
 
 type DashboardRole = 'Admin' | 'Social Media Manager' | 'General Manager' | null;
@@ -71,14 +72,14 @@ function formatNotificationTime(ms: number): string {
   if (diff < 60_000) return 'Just now';
   if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
-  return d.toLocaleDateString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
 const Header = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [currentUser, setCurrentUser] = useState<HeaderUser>({ name: '', email: '' });
+  const [currentUser, setCurrentUser] = useState<HeaderUser>({ name: '', phoneNumber: '' });
   const [role, setRole] = useState<DashboardRole>(null);
   const [inboxOpen, setInboxOpen] = useState(false);
   const inboxRef = useRef<HTMLDivElement>(null);
@@ -93,8 +94,8 @@ const Header = () => {
   useEffect(() => {
     setMounted(true);
     const name = localStorage.getItem('admin_name') ?? '';
-    const email = localStorage.getItem('admin_email') ?? '';
-    setCurrentUser({ name, email });
+    const phoneNumber = localStorage.getItem('admin_phone') ?? '';
+    setCurrentUser({ name, phoneNumber });
     setRole(getDisplayRole());
   }, []);
 
@@ -103,12 +104,40 @@ const Header = () => {
     if (role === 'Admin') fetchNotifications();
   }, [role, fetchNotifications]);
 
-  // Poll so the badge updates when someone else adds something (no need to open inbox)
   useEffect(() => {
     if (role !== 'Admin') return;
-    const interval = setInterval(() => fetchNotifications(), 15000);
-    return () => clearInterval(interval);
-  }, [role, fetchNotifications]);
+    const connection = createNotificationsConnection();
+
+    const onCreated = (payload: Record<string, unknown>) => {
+      useNotificationStore.getState().upsertNotification({
+        id: Number(payload.id),
+        message: String(payload.message ?? ''),
+        createdAt: normalizeCreatedAt(payload.createdAt),
+      });
+    };
+    const onDeleted = (payload: Record<string, unknown>) => {
+      useNotificationStore.getState().removeNotificationLocal(Number(payload.id));
+    };
+    const onCleared = () => {
+      useNotificationStore.getState().clearNotificationsLocal();
+    };
+
+    connection.on('NotificationCreated', onCreated);
+    connection.on('NotificationDeleted', onDeleted);
+    connection.on('NotificationsCleared', onCleared);
+    connection.onreconnected(() => {
+      void useNotificationStore.getState().fetchNotifications();
+    });
+
+    void connection.start().catch(() => {});
+
+    return () => {
+      connection.off('NotificationCreated', onCreated);
+      connection.off('NotificationDeleted', onDeleted);
+      connection.off('NotificationsCleared', onCleared);
+      void connection.stop();
+    };
+  }, [role]);
 
   useEffect(() => {
     if (inboxOpen) fetchNotifications();
@@ -128,7 +157,8 @@ const Header = () => {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('admin_name');
-    localStorage.removeItem('admin_email');
+    localStorage.removeItem('admin_phone');
+    localStorage.removeItem('permissions_cache_v1');
     router.push('/logIn');
   };
 
@@ -226,7 +256,7 @@ const Header = () => {
           <ProfileIcon />
           <div className="flex flex-col text-xs leading-tight text-end">
             <span className="font-semibold text-slate-800">{currentUser.name}</span>
-            <span className="text-slate-500">{currentUser.email}</span>
+            <span className="text-slate-500">{currentUser.phoneNumber}</span>
           </div>
         </div>
 

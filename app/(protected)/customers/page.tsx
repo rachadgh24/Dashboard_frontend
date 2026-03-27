@@ -1,6 +1,6 @@
 'use client';
 import { FaUserCircle, FaEye, FaTrash, FaChevronDown, FaChevronLeft, FaChevronRight, FaCar } from 'react-icons/fa';
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useRef, useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocale } from '@/components/I18nProvider';
 import SearchBar from '@/src/components/SearchBar';
@@ -9,12 +9,20 @@ import Link from 'next/link';
 import { useCustomerStore } from '../../../store/customersState';
 import type { CreateCustomerPayload } from '../../../store/customersState';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
+import { API_BASE } from '@/lib/apiBase';
+import { apiFetch } from '@/lib/apiClient';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, type PageSizeChoice } from '@/lib/pageSizeOptions';
+import { usePermissionsStore } from '@/store/permissionsState';
 
 export default function CustomersPage() {
   const { t } = useTranslation();
   const { locale } = useLocale();
   const [mounted, setMounted] = useState(false);
+  const hasClaim = usePermissionsStore((s) => s.hasClaim);
+  const canCreate = hasClaim('CreateCustomer');
+  const canView = hasClaim('ViewCustomer');
+  const canDelete = hasClaim('DeleteCustomer');
+  const canSearchCustomers = hasClaim('SearchCustomers');
   const filteredCustomers = useCustomerStore((state) => state.filteredCustomers);
   const query = useCustomerStore((state) => state.query);
   const fetchCustomersPaginate = useCustomerStore((state) => state.fetchCustomersPaginate);
@@ -30,9 +38,11 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<PageSizeChoice>(DEFAULT_PAGE_SIZE);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [sortBy, setSortBy] = useState<string | null>(null);
+  const isFirstLoad = useRef(true);
 
   const getAuthHeaders = () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -47,26 +57,26 @@ export default function CustomersPage() {
 
   useEffect(() => {
     const init = async () => {
-      setLoading(true);
+      const first = isFirstLoad.current;
+      if (first) setLoading(true);
       setError(null);
       try {
-        const [countRes, size] = await Promise.all([
-          fetch(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() }),
-          fetchCustomersPaginate(1, sortBy ?? undefined),
-        ]);
-        const total: number = await countRes.json();
-        const ps = size || 1;
-        setPageSize(ps);
-        setTotalPages(Math.max(1, Math.ceil(total / ps)));
+        const total = await apiFetch<number>(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() });
+        await fetchCustomersPaginate(1, itemsPerPage, sortBy ?? undefined);
+        setTotalRecords(total);
+        setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
         setCurrentPage(1);
       } catch (err) {
         setError(err instanceof Error ? err.message : t('failedToLoadCustomers'));
       } finally {
-        setLoading(false);
+        if (first) {
+          setLoading(false);
+          isFirstLoad.current = false;
+        }
       }
     };
     init();
-  }, [fetchCustomersPaginate, sortBy]);
+  }, [fetchCustomersPaginate, sortBy, itemsPerPage]);
 
   const toggleExpanded = (customerId: number) => {
     setExpandedCustomerIds((prev) =>
@@ -94,27 +104,17 @@ export default function CustomersPage() {
 
   const goToPage = async (page: number) => {
     if (page < 1) return;
-    setLoading(true);
     setError(null);
     try {
-      const [countRes, size] = await Promise.all([
-        fetch(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() }),
-        fetchCustomersPaginate(page, sortBy ?? undefined),
-      ]);
-      const total: number = await countRes.json();
-      const newTotalPages = Math.max(1, Math.ceil(total / pageSize));
+      const total = await apiFetch<number>(`${API_BASE}/Customers/count`, { headers: getAuthHeaders() });
+      const newTotalPages = Math.max(1, Math.ceil(total / itemsPerPage));
       const safePage = Math.min(page, newTotalPages);
-      if (safePage < page) {
-        await fetchCustomersPaginate(safePage, sortBy ?? undefined);
-        setCurrentPage(safePage);
-      } else {
-        setCurrentPage(page);
-      }
+      await fetchCustomersPaginate(safePage, itemsPerPage, sortBy ?? undefined);
+      setTotalRecords(total);
+      setCurrentPage(safePage);
       setTotalPages(newTotalPages);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('failedToLoadCustomers'));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -164,10 +164,13 @@ export default function CustomersPage() {
                 </p>
               </div>
               <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-                {mounted ? t('totalCount', { count: filteredCustomers.length }) : `${filteredCustomers.length} total`}
+                {mounted
+                  ? t('totalCount', { count: !query.trim() ? totalRecords : filteredCustomers.length })
+                  : `${!query.trim() ? totalRecords : filteredCustomers.length} total`}
               </span>
             </div>
 
+            {canCreate && (
             <form
               onSubmit={handleCreate}
               className="flex flex-col gap-2"
@@ -208,8 +211,10 @@ export default function CustomersPage() {
                 {mounted ? t('createCustomer') : 'Create customer'}
               </button>
             </form>
+            )}
           </div>
 
+          {canSearchCustomers && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="mb-2 text-sm font-semibold text-gray-900">
               {mounted ? t('quickSearch') : 'Quick search'}
@@ -219,6 +224,7 @@ export default function CustomersPage() {
               {mounted ? t('searchByNameLastnameCity') : 'Search by name, last name, or city.'}
             </p>
           </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -226,20 +232,36 @@ export default function CustomersPage() {
             <h2 className="text-sm font-semibold text-gray-900">
               {mounted ? t('allCustomers') : 'All customers'}
             </h2>
-            <label className="flex items-center gap-2 text-xs text-gray-600">
-              <span>{mounted ? t('sortBy') : 'Sort by'}</span>
-              <select
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
-                value={sortBy ?? ''}
-                onChange={(e) => setSortBy(e.target.value || null)}
-              >
-                <option value="">{mounted ? t('sortDefault') : 'Default'}</option>
-                <option value="LeastCars">{mounted ? t('sortByLeastCars') : 'Least cars'}</option>
-                <option value="MostCars">{mounted ? t('sortByMostCars') : 'Most cars'}</option>
-                <option value="CarName">{mounted ? t('sortByCarName') : 'Car name'}</option>
-                <option value="OwnerName">{mounted ? t('sortByOwnerName') : 'Owner name'}</option>
-              </select>
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{mounted ? t('perPage') : 'Per page'}</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value) as PageSizeChoice)}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{mounted ? t('sortBy') : 'Sort by'}</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                  value={sortBy ?? ''}
+                  onChange={(e) => setSortBy(e.target.value || null)}
+                >
+                  <option value="">{mounted ? t('sortDefault') : 'Default'}</option>
+                  <option value="LeastCars">{mounted ? t('sortByLeastCars') : 'Least cars'}</option>
+                  <option value="MostCars">{mounted ? t('sortByMostCars') : 'Most cars'}</option>
+                  <option value="CarName">{mounted ? t('sortByCarName') : 'Car name'}</option>
+                  <option value="OwnerName">{mounted ? t('sortByOwnerName') : 'Owner name'}</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -290,6 +312,7 @@ export default function CustomersPage() {
                       className="flex items-center gap-2 shrink-0"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {canView && (
                       <Link
                         href={`/customers/${customer.id}`}
                         className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
@@ -298,6 +321,8 @@ export default function CustomersPage() {
                         <FaEye size={14} className="me-1" />
                         {mounted ? t('view') : 'View'}
                       </Link>
+                      )}
+                      {canDelete && (
                       <button
                         type="button"
                         className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
@@ -306,6 +331,7 @@ export default function CustomersPage() {
                         <FaTrash size={12} className="me-1" />
                         {mounted ? t('delete') : 'Delete'}
                       </button>
+                      )}
                     </div>
                   </div>
 
