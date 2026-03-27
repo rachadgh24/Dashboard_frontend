@@ -25,6 +25,9 @@ export interface Notification {
   role?: string;
 }
 
+const asRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
 interface NotificationsStore {
   notifications: Notification[];
   loading: boolean;
@@ -46,14 +49,14 @@ export const useNotificationStore = create<NotificationsStore>((set) => ({
     set({ loading: true, error: null });
     try {
       const raw = await apiFetch<unknown[]>(NOTIFICATIONS_API, { cache: 'no-store', headers: getAuthHeaders() });
-      const notifications: Notification[] = (raw || []).map((item) => {
-        const obj = item as Record<string, unknown>;
+      const notifications: Notification[] = (raw || []).map((item: unknown) => {
+        const obj = asRecord(item);
         return {
-          id: Number((obj as { id?: number }).id),
-          message: String((obj as { message?: string }).message ?? ''),
-          createdAt: normalizeCreatedAt((obj as { createdAt?: unknown }).createdAt),
-          name: (obj as { name?: string }).name,
-          role: (obj as { role?: string }).role,
+          id: Number(obj.id),
+          message: String(obj.message ?? ''),
+          createdAt: normalizeCreatedAt(obj.createdAt),
+          name: typeof obj.name === 'string' ? obj.name : undefined,
+          role: typeof obj.role === 'string' ? obj.role : undefined,
         };
       });
       set({ notifications, loading: false, error: null });
