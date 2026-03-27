@@ -16,9 +16,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { FaChevronDown, FaChevronRight } from 'react-icons/fa';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const CLAIMS_API = `${API_BASE}/Claims`;
 const ROLES_API = `${API_BASE}/Roles`;
 

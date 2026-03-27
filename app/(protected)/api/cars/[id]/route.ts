@@ -1,6 +1,7 @@
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
 
-const CARS_API = 'https://localhost:7190/Cars';
+const CARS_API = `${API_BASE}/Cars`;
 
 export async function PUT(
   request: Request,

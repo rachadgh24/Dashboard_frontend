@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCustomerStore } from '@/store/customersState';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, type PageSizeChoice } from '@/lib/pageSizeOptions';
 import { usePermissionsStore } from '@/store/permissionsState';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const CARS_API = `${API_BASE}/Cars`;
 
 type Car = {
@@ -30,8 +31,9 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<PageSizeChoice>(DEFAULT_PAGE_SIZE);
   const [totalPages, setTotalPages] = useState(1);
+  const [recordTotal, setRecordTotal] = useState(0);
   const [model, setModel] = useState('');
   const [maxSpeed, setMaxSpeed] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -53,14 +55,15 @@ export default function SalesPage() {
   useEffect(() => {
     const init = async () => {
       try {
+        setLoading(true);
         const [total, data] = await Promise.all([
           apiFetch<number>(`${CARS_API}/count`, { headers: getAuthHeaders() }),
-          apiFetch<Car[]>(`${CARS_API}/paginate?page=1`, { headers: getAuthHeaders() }),
+          apiFetch<Car[]>(`${CARS_API}/paginate?page=1&pageSize=${itemsPerPage}`, { headers: getAuthHeaders() }),
         ]);
-        const ps = data.length || 1;
-        setPageSize(ps);
-        setCars(data);
-        setTotalPages(Math.max(1, Math.ceil(total / ps)));
+        setRecordTotal(total);
+        setCars(data ?? []);
+        setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
+        setCurrentPage(1);
       } catch (err) {
         console.error('Error fetching cars', err);
         setError(err instanceof Error ? err.message : t('failedToLoadCars'));
@@ -69,26 +72,22 @@ export default function SalesPage() {
       }
     };
     init();
-  }, []);
+  }, [itemsPerPage]);
 
   const goToPage = async (page: number) => {
     if (page < 1) return;
     setLoading(true);
     try {
-      const [total, data] = await Promise.all([
-        apiFetch<number>(`${CARS_API}/count`, { headers: getAuthHeaders() }),
-        apiFetch<Car[]>(`${CARS_API}/paginate?page=${page}`, { headers: getAuthHeaders() }),
-      ]);
-      const newTotalPages = Math.max(1, Math.ceil(total / pageSize));
+      const total = await apiFetch<number>(`${CARS_API}/count`, { headers: getAuthHeaders() });
+      const newTotalPages = Math.max(1, Math.ceil(total / itemsPerPage));
       const safePage = Math.min(page, newTotalPages);
-      if (safePage < page) {
-        const safeData = await apiFetch<Car[]>(`${CARS_API}/paginate?page=${safePage}`, { headers: getAuthHeaders() });
-        setCars(safeData ?? []);
-        setCurrentPage(safePage);
-      } else {
-        setCars(data);
-        setCurrentPage(page);
-      }
+      const data = await apiFetch<Car[]>(
+        `${CARS_API}/paginate?page=${safePage}&pageSize=${itemsPerPage}`,
+        { headers: getAuthHeaders() },
+      );
+      setRecordTotal(total);
+      setCars(data ?? []);
+      setCurrentPage(safePage);
       setTotalPages(newTotalPages);
     } finally {
       setLoading(false);
@@ -107,16 +106,32 @@ export default function SalesPage() {
     <main className="min-h-full bg-transparent">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <section className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div>
               <h1 className="text-lg font-semibold text-gray-900">{t('cars')}</h1>
               <p className="text-xs text-gray-500">
                 {t('carsSubtitle')}
               </p>
             </div>
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-              {t('inTotal', { count: cars.length })}
-            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{t('perPage')}</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value) as PageSizeChoice)}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                {t('inTotal', { count: recordTotal })}
+              </span>
+            </div>
           </div>
 
           {canCreate && (

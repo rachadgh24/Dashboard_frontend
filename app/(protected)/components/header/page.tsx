@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { FaBell, FaUserCircle, FaTimes } from 'react-icons/fa';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { useNotificationStore } from '@/store/notificationsState';
+import { createNotificationsConnection } from '@/lib/notificationsHub';
+import { normalizeCreatedAt, useNotificationStore } from '@/store/notificationsState';
 
 type HeaderUser = {
   name: string;
@@ -103,12 +104,40 @@ const Header = () => {
     if (role === 'Admin') fetchNotifications();
   }, [role, fetchNotifications]);
 
-  // Poll so the badge updates when someone else adds something (no need to open inbox)
   useEffect(() => {
     if (role !== 'Admin') return;
-    const interval = setInterval(() => fetchNotifications(), 15000);
-    return () => clearInterval(interval);
-  }, [role, fetchNotifications]);
+    const connection = createNotificationsConnection();
+
+    const onCreated = (payload: Record<string, unknown>) => {
+      useNotificationStore.getState().upsertNotification({
+        id: Number(payload.id),
+        message: String(payload.message ?? ''),
+        createdAt: normalizeCreatedAt(payload.createdAt),
+      });
+    };
+    const onDeleted = (payload: Record<string, unknown>) => {
+      useNotificationStore.getState().removeNotificationLocal(Number(payload.id));
+    };
+    const onCleared = () => {
+      useNotificationStore.getState().clearNotificationsLocal();
+    };
+
+    connection.on('NotificationCreated', onCreated);
+    connection.on('NotificationDeleted', onDeleted);
+    connection.on('NotificationsCleared', onCleared);
+    connection.onreconnected(() => {
+      void useNotificationStore.getState().fetchNotifications();
+    });
+
+    void connection.start().catch(() => {});
+
+    return () => {
+      connection.off('NotificationCreated', onCreated);
+      connection.off('NotificationDeleted', onDeleted);
+      connection.off('NotificationsCleared', onCleared);
+      void connection.stop();
+    };
+  }, [role]);
 
   useEffect(() => {
     if (inboxOpen) fetchNotifications();
@@ -129,6 +158,7 @@ const Header = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('admin_name');
     localStorage.removeItem('admin_phone');
+    localStorage.removeItem('permissions_cache_v1');
     router.push('/logIn');
   };
 

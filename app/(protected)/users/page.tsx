@@ -2,7 +2,7 @@
 
 import { FaUserCircle, FaTrash, FaPencilAlt, FaUserTag } from 'react-icons/fa';
 import { FiSearch } from 'react-icons/fi';
-import { useEffect, useState, FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,9 @@ import {
   type UserRole,
 } from '@/store/usersState';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { API_BASE } from '@/lib/apiBase';
+import { apiFetch } from '@/lib/apiClient';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, type PageSizeChoice } from '@/lib/pageSizeOptions';
 
 function roleLabelKey(role: UserRole): string {
   const normalized = String(role).toLowerCase().replace(/\s/g, '');
@@ -38,6 +41,7 @@ export default function UsersPage() {
   const query = useUserStore((state) => state.query);
   const setQuery = useUserStore((state) => state.setQuery);
   const fetchUsers = useUserStore((state) => state.fetchUsers);
+  const fetchUsersPaginate = useUserStore((state) => state.fetchUsersPaginate);
   const roles = useUserStore((state) => state.roles);
   const fetchRoles = useUserStore((state) => state.fetchRoles);
   const createUser = useUserStore((state) => state.createUser);
@@ -49,8 +53,11 @@ export default function UsersPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('General Manager');
-  const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isFirstListLoad = useRef(true);
+  const didLoadOnceRef = useRef(false);
+  const prevQueryRef = useRef<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [editUser, setEditUser] = useState<User | null>(null);
@@ -66,6 +73,79 @@ export default function UsersPage() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState<PageSizeChoice>(DEFAULT_PAGE_SIZE);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+
+  const getAuthHeaders = () => {
+    const headers: Record<string, string> = {};
+    if (typeof window === 'undefined') return headers;
+    const token = localStorage.getItem('token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  };
+
+  const loadPaginatedFirstPage = useCallback(async () => {
+    const countParams = new URLSearchParams();
+    if (roleFilter) countParams.set('role', roleFilter);
+    const countSuffix = countParams.toString() ? `?${countParams.toString()}` : '';
+    const total = await apiFetch<number>(`${API_BASE}/Users/count${countSuffix}`, {
+      headers: getAuthHeaders(),
+    });
+    await fetchUsersPaginate(1, itemsPerPage, roleFilter || undefined);
+    setTotalRecords(total);
+    setTotalPages(Math.max(1, Math.ceil(total / itemsPerPage)));
+    setCurrentPage(1);
+  }, [roleFilter, itemsPerPage, fetchUsersPaginate]);
+
+  const goToPage = async (page: number) => {
+    if (page < 1 || query.trim()) return;
+    setError(null);
+    try {
+      const countParams = new URLSearchParams();
+      if (roleFilter) countParams.set('role', roleFilter);
+      const countSuffix = countParams.toString() ? `?${countParams.toString()}` : '';
+      const total = await apiFetch<number>(`${API_BASE}/Users/count${countSuffix}`, {
+        headers: getAuthHeaders(),
+      });
+      const newTotalPages = Math.max(1, Math.ceil(total / itemsPerPage));
+      const safePage = Math.min(page, newTotalPages);
+      await fetchUsersPaginate(safePage, itemsPerPage, roleFilter || undefined);
+      setTotalRecords(total);
+      setCurrentPage(safePage);
+      setTotalPages(newTotalPages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
+    }
+  };
+
+  const reloadList = useCallback(async () => {
+    if (query.trim() && canSearchUsers) {
+      await fetchUsers(roleFilter || undefined);
+      return;
+    }
+    const countParams = new URLSearchParams();
+    if (roleFilter) countParams.set('role', roleFilter);
+    const countSuffix = countParams.toString() ? `?${countParams.toString()}` : '';
+    const total = await apiFetch<number>(`${API_BASE}/Users/count${countSuffix}`, {
+      headers: getAuthHeaders(),
+    });
+    const newTotalPages = Math.max(1, Math.ceil(total / itemsPerPage));
+    const safePage = Math.min(currentPage, newTotalPages);
+    await fetchUsersPaginate(safePage, itemsPerPage, roleFilter || undefined);
+    setTotalRecords(total);
+    setTotalPages(newTotalPages);
+    setCurrentPage(safePage);
+  }, [
+    query,
+    canSearchUsers,
+    roleFilter,
+    itemsPerPage,
+    currentPage,
+    fetchUsers,
+    fetchUsersPaginate,
+  ]);
 
   useEffect(() => {
     if (!permissionsLoaded) return;
@@ -74,19 +154,76 @@ export default function UsersPage() {
       return;
     }
     const load = async () => {
-      setLoading(true);
+      const first = isFirstListLoad.current;
+      if (first) setInitialLoad(true);
       setError(null);
       try {
         await fetchRoles();
-        await fetchUsers(roleFilter || undefined);
+        const q = useUserStore.getState().query.trim();
+        if (q && canSearchUsers) {
+          await fetchUsers(roleFilter || undefined);
+        } else {
+          await loadPaginatedFirstPage();
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
       } finally {
-        setLoading(false);
+        if (first) {
+          setInitialLoad(false);
+          isFirstListLoad.current = false;
+        }
+        didLoadOnceRef.current = true;
       }
     };
     load();
-  }, [permissionsLoaded, canAccessUsers, router, fetchUsers, fetchRoles, roleFilter, t]);
+  }, [
+    permissionsLoaded,
+    canAccessUsers,
+    router,
+    fetchRoles,
+    fetchUsers,
+    loadPaginatedFirstPage,
+    canSearchUsers,
+  ]);
+
+  useEffect(() => {
+    if (!permissionsLoaded || !canAccessUsers || !didLoadOnceRef.current) return;
+    const q = query.trim();
+    if (q && canSearchUsers) {
+      void fetchUsers(roleFilter || undefined);
+      return;
+    }
+    void loadPaginatedFirstPage();
+  }, [
+    roleFilter,
+    itemsPerPage,
+    query,
+    canSearchUsers,
+    canAccessUsers,
+    permissionsLoaded,
+    fetchUsers,
+    loadPaginatedFirstPage,
+  ]);
+
+  useEffect(() => {
+    if (!permissionsLoaded || !canAccessUsers || !canSearchUsers) return;
+    const q = query.trim();
+    if (!q) return;
+    const id = window.setTimeout(() => {
+      if (useUserStore.getState().query.trim() !== q) return;
+      void fetchUsers(roleFilter || undefined);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [query, roleFilter, canSearchUsers, fetchUsers, permissionsLoaded, canAccessUsers]);
+
+  useEffect(() => {
+    if (!permissionsLoaded || !canAccessUsers) return;
+    const prev = prevQueryRef.current;
+    prevQueryRef.current = query;
+    if (prev !== null && prev.trim().length > 0 && !query.trim()) {
+      void loadPaginatedFirstPage();
+    }
+  }, [query, permissionsLoaded, canAccessUsers, loadPaginatedFirstPage]);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,6 +240,7 @@ export default function UsersPage() {
       setPhoneNumber('');
       setPassword('');
       setRole('General Manager');
+      await reloadList();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     }
@@ -130,6 +268,7 @@ export default function UsersPage() {
         city: editCity.trim() || undefined,
       });
       setEditUser(null);
+      await reloadList();
     } catch (err) {
       setEditError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     } finally {
@@ -151,6 +290,7 @@ export default function UsersPage() {
     try {
       await changeRole(roleUser.id, newRole);
       setRoleUser(null);
+      await reloadList();
     } catch (err) {
       setRoleError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     } finally {
@@ -161,6 +301,7 @@ export default function UsersPage() {
   const handleDelete = async (user: User) => {
     try {
       await deleteUser(user.id);
+      await reloadList();
     } catch (err) {
       setError(err instanceof Error ? err.message : t('failedToLoadUsers'));
     }
@@ -176,7 +317,7 @@ export default function UsersPage() {
     );
   }
 
-  if (loading) {
+  if (initialLoad) {
     return (
       <main className="min-h-full bg-transparent">
         <p className="text-slate-800" suppressHydrationWarning>
@@ -205,7 +346,7 @@ export default function UsersPage() {
                 <p className="text-xs text-gray-500">{t('usersSubtitle')}</p>
               </div>
               <span className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
-                {t('totalCount', { count: users.length })}
+                {t('totalCount', { count: !query.trim() ? totalRecords : filteredUsers.length })}
               </span>
             </div>
 
@@ -303,21 +444,37 @@ export default function UsersPage() {
             <h2 className="text-sm font-semibold text-gray-900">
               {t('allUsers')}
             </h2>
-            <label className="flex items-center gap-2 text-xs text-gray-600">
-              <span>{t('role')}</span>
-              <select
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter((e.target.value || '') as UserRole | '')}
-              >
-                <option value="">{t('sortDefault')}</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.name}>
-                    {t(roleLabelKey(r.name))}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{t('perPage')}</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value) as PageSizeChoice)}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>{t('role')}</span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-slate-400 focus:ring-0"
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter((e.target.value || '') as UserRole | '')}
+                >
+                  <option value="">{t('sortDefault')}</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.name}>
+                      {t(roleLabelKey(r.name))}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -394,6 +551,37 @@ export default function UsersPage() {
             {filteredUsers.length === 0 && (
               <div className="py-6 text-center text-xs text-gray-500">
                 {query.trim() ? t('noUsersMatchFilters') : t('noUsersYet')}
+              </div>
+            )}
+
+            {!query.trim() && (
+              <div className="mt-4 flex items-center justify-center gap-1 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 disabled:opacity-50"
+                  disabled={currentPage <= 1}
+                  onClick={() => goToPage(currentPage - 1)}
+                >
+                  ‹
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`rounded px-2.5 py-1.5 text-sm ${p === currentPage ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    onClick={() => goToPage(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="rounded border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 disabled:opacity-50"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => goToPage(currentPage + 1)}
+                >
+                  ›
+                </button>
               </div>
             )}
           </div>

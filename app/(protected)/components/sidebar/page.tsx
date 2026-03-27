@@ -4,13 +4,14 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { FaUsers, FaSalesforce, FaUserCog, FaNewspaper, FaHome } from 'react-icons/fa';
+import { FaUsers, FaSalesforce, FaUserCog, FaHome } from 'react-icons/fa';
 import { usePermissionsStore } from '@/store/permissionsState';
 
 const SideBar = () => {
   const { t } = useTranslation();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const hydrateFromCache = usePermissionsStore((s) => s.hydrateFromCache);
   const fetchPermissions = usePermissionsStore((s) => s.fetchPermissions);
   const hasClaim = usePermissionsStore((s) => s.hasClaim);
 
@@ -18,12 +19,12 @@ const SideBar = () => {
   const showCustomers = hasClaim('ViewCustomers');
   const showCars = hasClaim('ViewCars');
   const showUsers = hasClaim('ViewUsers');
-  const showPosts = hasClaim('ViewPosts');
 
   useEffect(() => {
     setMounted(true);
+    hydrateFromCache();
     fetchPermissions();
-  }, [fetchPermissions]);
+  }, [hydrateFromCache, fetchPermissions]);
 
   const linkBase =
     'flex flex-row items-center justify-center md:justify-start gap-0 md:gap-3 rounded-lg px-2 md:px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer';
@@ -118,28 +119,13 @@ const SideBar = () => {
             </Link>
           )}
 
-          {showPosts && (
-            <Link href="/posts" className="block w-full" title={mounted ? t('posts') : 'Posts'}>
-              <div
-                className={`${linkBase} ${pathname.includes('posts')
-                  ? 'bg-slate-100 text-slate-900'
-                  : 'text-slate-200 hover:bg-slate-800'
-                }`}
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-emerald-300 shrink-0">
-                  <FaNewspaper size={16} />
-                </span>
-                <span className="hidden md:inline">{mounted ? t('posts') : 'Posts'}</span>
-              </div>
-            </Link>
-          )}
         </nav>
       </div>
 
       <div className="hidden md:block mt-4 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] text-slate-200">
         <p className="font-semibold text-slate-50 mb-1">{mounted ? t('hint') : 'Hint'}</p>
         <p className="text-slate-300">
-          {mounted ? t('hintText') : 'Switch between customers, cars, and posts.'}
+          {mounted ? t('hintText') : 'Switch between customers, cars, and users.'}
         </p>
       </div>
     </div>

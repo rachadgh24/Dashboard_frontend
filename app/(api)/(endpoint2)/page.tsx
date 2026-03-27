@@ -1,6 +1,5 @@
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 export default async function Page({
   searchParams,

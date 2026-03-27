@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
 import { usePermissionsStore } from '@/store/permissionsState';
 import { getLandingRoute } from '@/lib/landingRoute';
@@ -16,8 +17,6 @@ type RegisterPayload = {
   lastName: string;
   city: string;
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 export default function RegisterPage() {
   const { t, ready } = useTranslation();

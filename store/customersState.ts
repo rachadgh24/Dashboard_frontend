@@ -1,7 +1,6 @@
 import { create } from 'zustand';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const CUSTOMERS_API = `${API_BASE}/Customers`;
 
 const getAuthHeaders = () => {
@@ -50,7 +49,7 @@ interface CustomerStore {
   filteredCustomers: Customer[];
   setSelectedCustomer: (customer: Customer) => void;
   fetchCustomers: () => Promise<void>;
-  fetchCustomersPaginate: (page: number, sortBy?: string) => Promise<number>;
+  fetchCustomersPaginate: (page: number, pageSize: number, sortBy?: string) => Promise<void>;
   fetchCustomer: (id: string) => Promise<void>;
   searchCustomers: (query: string) => Promise<void>;
   createCustomer: (payload: CreateCustomerPayload) => Promise<void>;
@@ -85,14 +84,18 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
       await syncFilteredCustomers(customers);
     },
 
-    fetchCustomersPaginate: async (page, sortBy) => {
-      const url = sortBy
-        ? `${CUSTOMERS_API}/paginate?page=${page}&sortBy=${encodeURIComponent(sortBy)}`
-        : `${CUSTOMERS_API}/paginate?page=${page}`;
-      const data = await apiFetch<Customer[]>(url, { cache: 'no-store', headers: getAuthHeaders() });
+    fetchCustomersPaginate: async (page, pageSize, sortBy) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
+      if (sortBy) params.set('sortBy', sortBy);
+      const data = await apiFetch<Customer[]>(`${CUSTOMERS_API}/paginate?${params.toString()}`, {
+        cache: 'no-store',
+        headers: getAuthHeaders(),
+      });
       const customers = data ?? [];
       set({ customers, filteredCustomers: customers });
-      return customers.length;
     },
 
     fetchCustomer: async (id: string) => {

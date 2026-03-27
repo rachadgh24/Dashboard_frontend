@@ -14,6 +14,7 @@
   "expand": "توسيع",
   "collapse": "طي",
   "totalCount": "{{count}} الإجمالي",
+  "perPage": "لكل صفحة",
   "inTotal": "{{count}} في المجموع",
   "carsCount": "السيارات ({{count}})",
   "id": "المعرف",

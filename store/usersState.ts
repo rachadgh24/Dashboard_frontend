@@ -1,7 +1,6 @@
 import { create } from 'zustand';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const USERS_API = `${API_BASE}/Users`;
 const ROLES_API = `${API_BASE}/Roles`;
 
@@ -51,6 +50,7 @@ interface UserStore {
   setQuery: (q: string) => void;
   setSelectedUser: (user: User) => void;
   fetchUsers: (role?: string) => Promise<void>;
+  fetchUsersPaginate: (page: number, pageSize: number, role?: string) => Promise<void>;
   fetchRoles: () => Promise<void>;
   fetchUser: (id: string) => Promise<User | null>;
   createUser: (payload: CreateUserPayload) => Promise<void>;
@@ -88,6 +88,17 @@ export const useUserStore = create<UserStore>((set, get) => ({
   fetchUsers: async (role?: string) => {
     const url = role ? `${USERS_API}?role=${encodeURIComponent(role)}` : USERS_API;
     const data = await apiFetch<User[]>(url, { cache: 'no-store', headers: getAuthHeaders() });
+    const query = get().query;
+    set({ users: data ?? [], filteredUsers: filterUsersByQuery(data ?? [], query) });
+  },
+
+  fetchUsersPaginate: async (page, pageSize, role) => {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (role) params.set('role', role);
+    const data = await apiFetch<User[]>(`${USERS_API}/paginate?${params.toString()}`, {
+      cache: 'no-store',
+      headers: getAuthHeaders(),
+    });
     const query = get().query;
     set({ users: data ?? [], filteredUsers: filterUsersByQuery(data ?? [], query) });
   },

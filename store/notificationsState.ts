@@ -1,7 +1,6 @@
 import { create } from 'zustand';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 const NOTIFICATIONS_API = `${API_BASE}/notifications`;
 
 const getAuthHeaders = () => {
@@ -12,7 +11,7 @@ const getAuthHeaders = () => {
   return headers;
 };
 
-function normalizeCreatedAt(value: unknown): number {
+export function normalizeCreatedAt(value: unknown): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return new Date(value).getTime();
   return Date.now();
@@ -31,11 +30,14 @@ interface NotificationsStore {
   loading: boolean;
   error: string | null;
   fetchNotifications: () => Promise<void>;
+  upsertNotification: (n: Notification) => void;
+  removeNotificationLocal: (id: number) => void;
+  clearNotificationsLocal: () => void;
   removeNotification: (id: number) => Promise<void>;
   clearAll: () => Promise<void>;
 }
 
-export const useNotificationStore = create<NotificationsStore>((set, get) => ({
+export const useNotificationStore = create<NotificationsStore>((set) => ({
   notifications: [],
   loading: false,
   error: null,
@@ -62,6 +64,23 @@ export const useNotificationStore = create<NotificationsStore>((set, get) => ({
       });
     }
   },
+
+  upsertNotification: (n: Notification) => {
+    set((state) => {
+      const next = state.notifications.filter((x) => x.id !== n.id);
+      next.push(n);
+      next.sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+      return { notifications: next };
+    });
+  },
+
+  removeNotificationLocal: (id: number) => {
+    set((state) => ({
+      notifications: state.notifications.filter((x) => x.id !== id),
+    }));
+  },
+
+  clearNotificationsLocal: () => set({ notifications: [] }),
 
   removeNotification: async (id: number) => {
     try {

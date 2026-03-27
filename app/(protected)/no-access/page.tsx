@@ -17,6 +17,7 @@ export default function NoAccessPage() {
       localStorage.removeItem('token');
       localStorage.removeItem('admin_phone');
       localStorage.removeItem('admin_name');
+      localStorage.removeItem('permissions_cache_v1');
     } finally {
       router.replace('/logIn');
     }
@@ -31,7 +32,7 @@ export default function NoAccessPage() {
         </p>
         <p className="mt-2 text-sm text-slate-600">
           Contact an admin to assign you a role with at least one of these permissions: ViewDashboard, ViewCustomers,
-          ViewCars, ViewPosts, or ViewUsers.
+          ViewCars, or ViewUsers.
         </p>
 
         <div className="mt-6 flex justify-end">

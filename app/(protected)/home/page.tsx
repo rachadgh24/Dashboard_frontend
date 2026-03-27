@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaChevronDown, FaChevronUp, FaTrophy, FaPlus, FaCar, FaNewspaper, FaUserPlus } from 'react-icons/fa';
+import { FaChevronDown, FaChevronUp, FaTrophy, FaPlus, FaCar, FaUserPlus } from 'react-icons/fa';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
 import { getLandingRoute } from '@/lib/landingRoute';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://localhost:7190';
 
 type Car = { id: number; model: string; maxSpeed: number; customerId?: number };
 
@@ -98,7 +97,6 @@ export default function HomePage() {
   const quickActions = [
     ...(hasClaim('CreateCustomer') ? [{ label: mounted ? t('createCustomer') : 'Create customer', href: '/customers', icon: FaPlus, key: 'createCustomer' }] : []),
     ...(hasClaim('CreateCar') ? [{ label: mounted ? t('addCar') : 'Add car', href: '/sales', icon: FaCar, key: 'addCar' }] : []),
-    ...(hasClaim('CreatePost') ? [{ label: mounted ? t('createPost') : 'Create a post', href: '/posts', icon: FaNewspaper, key: 'createPost' }] : []),
     ...(hasClaim('CreateUser') ? [{ label: mounted ? t('createUser') : 'Create a user', href: '/users', icon: FaUserPlus, key: 'createUser' }] : []),
   ];
 
