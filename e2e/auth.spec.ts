@@ -75,21 +75,22 @@ test.describe('Auth', () => {
       await page.goto('/register');
 
       await expect(page.getByRole('heading', { name: /register/i })).toBeVisible();
+      await expect(page.getByPlaceholder(/organization name/i)).toBeVisible();
       await expect(page.getByPlaceholder(/first name/i)).toBeVisible();
       await expect(page.getByPlaceholder(/last name/i)).toBeVisible();
       await expect(page.getByPlaceholder(/phone/i)).toBeVisible();
       await expect(page.getByPlaceholder(/password/i)).toBeVisible();
-      await expect(page.getByPlaceholder(/city/i)).toBeVisible();
       await expect(page.getByRole('button', { name: /create account/i })).toBeVisible();
       await expect(page.getByRole('link', { name: /sign in/i })).toBeVisible();
     });
 
-    test('should have create account button disabled when phone or password is empty', async ({ page }) => {
+    test('should have create account button disabled when required fields are empty', async ({ page }) => {
       await page.goto('/register');
 
       const createBtn = page.getByRole('button', { name: /create account/i });
       await expect(createBtn).toBeDisabled();
 
+      await page.getByPlaceholder(/organization name/i).fill('Acme');
       await page.getByPlaceholder(/phone/i).fill('+1234567890');
       await page.getByPlaceholder(/password/i).fill('password123');
       await expect(createBtn).toBeEnabled();
@@ -104,6 +105,7 @@ test.describe('Auth', () => {
       });
 
       await page.goto('/register');
+      await page.getByPlaceholder(/organization name/i).fill('Acme');
       await page.getByPlaceholder(/phone/i).fill('+1999999999');
       await page.getByPlaceholder(/password/i).fill('password123');
       await page.getByRole('button', { name: /create account/i }).click();
@@ -128,6 +130,7 @@ test.describe('Auth', () => {
       });
 
       await page.goto('/register');
+      await page.getByPlaceholder(/organization name/i).fill('Acme');
       await page.getByPlaceholder(/first name/i).fill('New');
       await page.getByPlaceholder(/last name/i).fill('User');
       await page.getByPlaceholder(/phone/i).fill('+1234567890');

@@ -11,11 +11,11 @@ import { usePermissionsStore } from '@/store/permissionsState';
 import { getLandingRoute } from '@/lib/landingRoute';
 
 type RegisterPayload = {
+  organizationName: string;
   phoneNumber: string;
   password: string;
   name: string;
   lastName: string;
-  city: string;
 };
 
 export default function RegisterPage() {
@@ -23,11 +23,11 @@ export default function RegisterPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [form, setForm] = useState<RegisterPayload>({
+    organizationName: '',
     phoneNumber: '',
     password: '',
     name: '',
     lastName: '',
-    city: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -38,8 +38,12 @@ export default function RegisterPage() {
   }, []);
 
   const canSubmit = useMemo(
-    () => form.phoneNumber.trim() !== '' && form.password.trim() !== '' && !isSubmitting,
-    [form.phoneNumber, form.password, isSubmitting],
+    () =>
+      form.organizationName.trim() !== '' &&
+      form.phoneNumber.trim() !== '' &&
+      form.password.trim() !== '' &&
+      !isSubmitting,
+    [form.organizationName, form.phoneNumber, form.password, isSubmitting],
   );
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -47,7 +51,7 @@ export default function RegisterPage() {
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!form.phoneNumber.trim() || !form.password.trim()) {
+    if (!form.organizationName.trim() || !form.phoneNumber.trim() || !form.password.trim()) {
       setErrorMessage(t('phonePasswordRequired'));
       return;
     }
@@ -58,11 +62,11 @@ export default function RegisterPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          organizationName: form.organizationName.trim(),
           phoneNumber: form.phoneNumber.trim(),
           password: form.password,
           name: form.name.trim(),
           lastName: form.lastName.trim(),
-          city: form.city.trim(),
         }),
       });
 
@@ -76,11 +80,11 @@ export default function RegisterPage() {
 
       setSuccessMessage(t('accountCreated'));
       setForm({
+        organizationName: '',
         phoneNumber: '',
         password: '',
         name: '',
         lastName: '',
-        city: '',
       });
       const landing = getLandingRoute(usePermissionsStore.getState().hasClaim);
       router.push(landing);
@@ -126,6 +130,12 @@ export default function RegisterPage() {
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <input
+              value={form.organizationName}
+              onChange={(e) => setForm((prev) => ({ ...prev, organizationName: e.target.value }))}
+              placeholder={t('organizationName')}
+              className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400 sm:col-span-2"
+            />
+            <input
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder={t('firstName')}
@@ -152,13 +162,6 @@ export default function RegisterPage() {
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
             placeholder={t('password')}
-            className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400"
-          />
-
-          <input
-            value={form.city}
-            onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
-            placeholder={t('city')}
             className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-400"
           />
 

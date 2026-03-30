@@ -93,6 +93,7 @@
   "createYourAccount": "إنشاء حسابك",
   "register": "التسجيل",
   "joinNow": "انضم الآن وابدأ إدارة المحتوى.",
+  "organizationName": "اسم المؤسسة",
   "firstName": "الاسم الأول",
   "registrationFailed": "فشل التسجيل. يرجى المحاولة مرة أخرى.",
   "accountCreated": "تم إنشاء الحساب بنجاح.",

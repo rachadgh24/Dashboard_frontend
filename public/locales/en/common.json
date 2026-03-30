@@ -93,6 +93,7 @@
   "createYourAccount": "Create your account",
   "register": "Register",
   "joinNow": "Join now and start managing your content.",
+  "organizationName": "Organization name",
   "firstName": "First name",
   "registrationFailed": "Registration failed. Please try again.",
   "accountCreated": "Account created successfully.",
