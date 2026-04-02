@@ -10,6 +10,7 @@ import {
   type UserRole,
 } from '@/store/usersState';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { Skeleton } from '../../components/skeletons/Skeleton';
 
 function roleLabelKey(role: UserRole): string {
   const normalized = String(role).toLowerCase().replace(/\s/g, '');
@@ -133,26 +134,26 @@ export default function UserDetailPage() {
     }
   };
 
-  if (!canAccessUsers) {
+  if (!canAccessUsers || !id || loading) {
     return (
       <main className="flex min-h-full items-center justify-center bg-transparent py-8">
-        <div className="text-gray-700">{t('loading')}</div>
-      </main>
-    );
-  }
-
-  if (!id) {
-    return (
-      <main className="flex min-h-full items-center justify-center bg-transparent py-8">
-        <div className="text-gray-700">{t('noIdProvided')}</div>
-      </main>
-    );
-  }
-
-  if (loading) {
-    return (
-      <main className="flex min-h-full items-center justify-center bg-transparent py-8">
-        <div className="text-gray-700">{t('loading')}</div>
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 space-y-4">
+          <Skeleton className="h-7 w-2/5" />
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Skeleton className="h-9 w-28 rounded-lg" />
+            <Skeleton className="h-9 w-20 rounded-lg" />
+          </div>
+        </div>
       </main>
     );
   }

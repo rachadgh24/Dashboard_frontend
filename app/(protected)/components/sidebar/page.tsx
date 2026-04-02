@@ -1,11 +1,17 @@
 'use client';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Link from 'next/link';
 import Image from 'next/image';
 import { FaUsers, FaSalesforce, FaUserCog, FaHome } from 'react-icons/fa';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { useUserStore } from '@/store/usersState';
+import { useCustomerStore } from '@/store/customersState';
+import { usePrefetchOnHover } from '@/lib/prefetch';
+import { API_BASE } from '@/lib/apiBase';
+import { apiFetch } from '@/lib/apiClient';
+import { DEFAULT_PAGE_SIZE } from '@/lib/pageSizeOptions';
 
 const SideBar = () => {
   const { t } = useTranslation();
@@ -25,6 +31,43 @@ const SideBar = () => {
     hydrateFromCache();
     fetchPermissions();
   }, [hydrateFromCache, fetchPermissions]);
+
+  const getAuthHeaders = useCallback(() => {
+    const headers: Record<string, string> = {};
+    if (typeof window === 'undefined') return headers;
+    const token = localStorage.getItem('token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }, []);
+
+  const prefetchHome = usePrefetchOnHover(
+    'home-stats',
+    useCallback(async () => {
+      await apiFetch(`${API_BASE}/Dashboard/stats`, { headers: getAuthHeaders() });
+    }, [getAuthHeaders]),
+  );
+
+  const prefetchCustomers = usePrefetchOnHover(
+    'customers-page-1',
+    useCallback(async () => {
+      await useCustomerStore.getState().fetchCustomersPaginate(1, DEFAULT_PAGE_SIZE);
+    }, []),
+  );
+
+  const prefetchSales = usePrefetchOnHover(
+    'sales-page-1',
+    useCallback(async () => {
+      await useCustomerStore.getState().fetchCustomers();
+    }, []),
+  );
+
+  const prefetchUsers = usePrefetchOnHover(
+    'users-page-1',
+    useCallback(async () => {
+      await useUserStore.getState().fetchRoles();
+      await useUserStore.getState().fetchUsersPaginate(1, DEFAULT_PAGE_SIZE);
+    }, []),
+  );
 
   const linkBase =
     'flex flex-row items-center justify-center md:justify-start gap-0 md:gap-3 rounded-lg px-2 md:px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer';
@@ -58,6 +101,7 @@ const SideBar = () => {
           {showDashboard && (
             <Link href="/home" className="block w-full" title={mounted ? t('home') : 'Home'}>
               <div
+                {...prefetchHome}
                 className={`${linkBase} ${pathname === '/home'
                   ? 'bg-slate-100 text-slate-900'
                   : 'text-slate-200 hover:bg-slate-800'
@@ -74,6 +118,7 @@ const SideBar = () => {
           {showCustomers && (
             <Link href="/customers" className="block w-full" title={mounted ? t('customers') : 'Customers'}>
               <div
+                {...prefetchCustomers}
                 className={`${linkBase} ${pathname.includes('customers')
                     ? 'bg-slate-100 text-slate-900'
                     : 'text-slate-200 hover:bg-slate-800'
@@ -90,6 +135,7 @@ const SideBar = () => {
           {showCars && (
             <Link href="/sales" className="block w-full" title={mounted ? t('cars') : 'Cars'}>
               <div
+                {...prefetchSales}
                 className={`${linkBase} ${pathname.includes('sales')
                     ? 'bg-slate-100 text-slate-900'
                     : 'text-slate-200 hover:bg-slate-800'
@@ -106,6 +152,7 @@ const SideBar = () => {
           {showUsers && (
             <Link href="/users" className="block w-full" title={mounted ? t('users') : 'Users'}>
               <div
+                {...prefetchUsers}
                 className={`${linkBase} ${pathname.includes('users')
                     ? 'bg-slate-100 text-slate-900'
                     : 'text-slate-200 hover:bg-slate-800'

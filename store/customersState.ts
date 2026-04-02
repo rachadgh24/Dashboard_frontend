@@ -128,18 +128,11 @@ export const useCustomerStore = create<CustomerStore>((set, get) => {
     },
 
     updateCustomer: async (id, payload) => {
-      const res = await fetch(`${CUSTOMERS_API}/${id}`, {
+      const updated = await apiFetch<Customer>(`${CUSTOMERS_API}/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ id, ...payload }),
       });
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error('Unauthorized: please sign in again.');
-        }
-        throw new Error('Failed to update customer');
-      }
-      const updated: Customer = await res.json();
       const customers = get().customers.map((c) => (c.id === id ? updated : c));
       const selectedCustomer =
         get().SelectedCustomer?.id === id ? updated : get().SelectedCustomer;

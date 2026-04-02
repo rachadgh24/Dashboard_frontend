@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaChevronDown, FaChevronUp, FaTrophy, FaPlus, FaCar, FaUserPlus } from 'react-icons/fa';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { Skeleton, SkeletonMetricCard } from '../components/skeletons/Skeleton';
 import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
 import { getLandingRoute } from '@/lib/landingRoute';
+import { isFresh, markFresh } from '@/lib/prefetch';
 
 type Car = { id: number; model: string; maxSpeed: number; customerId?: number };
 
@@ -45,6 +47,10 @@ export default function HomePage() {
       return;
     }
     const load = async () => {
+      if (isFresh('home-stats') && stats) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
@@ -53,6 +59,7 @@ export default function HomePage() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         setStats(data);
+        markFresh('home-stats');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load');
       } finally {
@@ -62,18 +69,34 @@ export default function HomePage() {
     load();
   }, [permissionsLoaded, canAccessDashboard, canAccessCustomers, canAccessCars, canAccessUsers, router]);
 
-  if (!permissionsLoaded || !canAccessDashboard) {
+  if (!permissionsLoaded || !canAccessDashboard || loading) {
     return (
       <main className="min-h-full bg-transparent">
-        <p className="text-slate-800">Loading...</p>
-      </main>
-    );
-  }
-
-  if (loading) {
-    return (
-      <main className="min-h-full bg-transparent">
-        <p className="text-slate-800">{mounted ? t('loading') : 'Loading...'}</p>
+        <div className="mx-auto max-w-5xl space-y-10">
+          <section className="grid gap-4 sm:grid-cols-3">
+            <SkeletonMetricCard />
+            <SkeletonMetricCard />
+            <SkeletonMetricCard />
+          </section>
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60 p-8 space-y-4">
+              <div className="flex items-center gap-6">
+                <Skeleton className="h-20 w-20 shrink-0 rounded-2xl" />
+                <div className="flex-1 space-y-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200/60 space-y-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-9 w-full rounded-lg" />
+              <Skeleton className="h-9 w-full rounded-lg" />
+              <Skeleton className="h-9 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
       </main>
     );
   }

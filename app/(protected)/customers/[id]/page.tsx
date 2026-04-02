@@ -5,6 +5,7 @@ import { useEffect, FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCustomerStore } from '../../../../store/customersState';
 import { usePermissionsStore } from '@/store/permissionsState';
+import { Skeleton } from '../../components/skeletons/Skeleton';
 
 export default function CustomerPage() {
   const { t } = useTranslation();
@@ -40,8 +41,24 @@ export default function CustomerPage() {
 
   if (!customer) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-700 text-lg">{t('loading')}</div>
+      <main className="flex min-h-full items-center justify-center bg-transparent py-8">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 space-y-4">
+          <Skeleton className="h-7 w-2/5" />
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Skeleton className="h-9 w-28 rounded-lg" />
+            <Skeleton className="h-9 w-20 rounded-lg" />
+          </div>
+        </div>
       </main>
     );
   }

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import { API_BASE } from '@/lib/apiBase';
 import { apiFetch } from '@/lib/apiClient';
+import { Skeleton } from '../../components/skeletons/Skeleton';
 const CLAIMS_API = `${API_BASE}/Claims`;
 const ROLES_API = `${API_BASE}/Roles`;
 
@@ -241,7 +242,16 @@ export default function NewRolePage() {
               </div>
 
               {loading ? (
-                <div className="text-xs text-slate-600">Loading…</div>
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="rounded-lg border border-slate-200 overflow-hidden">
+                      <div className="flex items-center justify-between bg-slate-50 px-3 py-2.5">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <DroppableColumn id="available">
                   <SortableContext items={availableItems} strategy={verticalListSortingStrategy}>
